@@ -1,5 +1,9 @@
 # Codex Windows Completion Reminder
 
+## Preview status and known limitations
+
+This is an early source preview. PermissionRequest may fire during automatic review even when no human action is required, so its custom popup can be misleading. Conversation-choice custom detection is not integrated. The read-only UIA/MSAA probes under experiments/ are feasibility tools: foreground and occluded choice cards were detected, but minimized detection and real human approval positive cases remain unverified. Automatic popup withdrawal and native/custom channel synchronization are not shipped. See docs/validation/2026-10-11-uia-probe.md. The archived patch under docs/prototypes/ includes a rejected policy and must not be applied as a release.
+
 A small Windows tray companion for Codex Desktop. It can show a persistent, non-activating popup when a task completes or Codex requests tool approval. The popup stays on top, does not take keyboard focus, and closes on a keyboard key or mouse button while passing that input through.
 
 This project targets **Codex Desktop on Windows**. Codex CLI, WSL, remote sessions, and service sessions are not supported in v1.

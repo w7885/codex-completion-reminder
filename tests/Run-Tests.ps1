@@ -59,11 +59,13 @@ try {
     if (-not (($permissionCommands -join ' ') -match 'CodexReminderHook\.exe')) { throw 'Install did not register PermissionRequest.' }
     $managed = @($installed.hooks.Stop | ForEach-Object { $_.hooks } | Where-Object { $_.command -match 'CodexReminderHook\.exe' })[0]
     if ($managed.commandWindows -ne $managed.command) { throw 'Windows JSON command override is missing.' }
-    $shellOutput = $stopPayload | powershell.exe -NoProfile -NonInteractive -Command $managed.commandWindows
+    # Execute the complete installed command without losing its nested quotes in Windows PowerShell 5.1.
+    $encodedCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($managed.commandWindows))
+    $shellOutput = $stopPayload | powershell.exe -NoProfile -NonInteractive -EncodedCommand $encodedCommand
     if ($LASTEXITCODE -ne 0 -or ($shellOutput -join '') -notmatch '^\s*\{.*"continue"\s*:\s*true.*\}\s*$') {
         throw 'Installed command must execute the bridge through PowerShell, including paths with spaces.'
     }
-    $approvalOutput = $permissionPayload | powershell.exe -NoProfile -NonInteractive -Command $managed.commandWindows
+    $approvalOutput = $permissionPayload | powershell.exe -NoProfile -NonInteractive -EncodedCommand $encodedCommand
     if ($LASTEXITCODE -ne 0 -or -not [string]::IsNullOrWhiteSpace(($approvalOutput -join ''))) {
         throw 'Installed approval command must preserve the no-decision stdout contract.'
     }

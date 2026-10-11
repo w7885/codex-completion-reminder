@@ -1,0 +1,541 @@
+diff --git a/README.md b/README.md
+index 840b7df..c9ded99 100644
+--- a/README.md
++++ b/README.md
+@@ -1,96 +1,67 @@
+ # Codex Windows Completion Reminder
+ 
+-A small Windows tray companion for Codex Desktop. It can show a persistent, non-activating popup when a task completes or Codex requests tool approval. The popup stays on top, does not take keyboard focus, and closes on a keyboard key or mouse button while passing that input through.
++A standalone Windows tray companion for Codex Desktop. A completed assistant turn can show a persistent, topmost popup without taking focus. A key or mouse-button press dismisses it and passes through to the current app.
+ 
+-This project targets **Codex Desktop on Windows**. Codex CLI, WSL, remote sessions, and service sessions are not supported in v1.
++## Channels and support
+ 
+-## Features
++- Completion: custom only, native only, both, or off.
++- Approval and conversation choice: custom notifications are currently unavailable. Explicitly choose native or off; there is no automatic native fallback.
++- New settings default to custom-only completion and off for approval/choice. Legacy unsupported custom approval/choice modes normalize to off; explicitly saved native preferences are retained.
++- Per-event wording and shared size/colors support previews and reset. Unsupported-event wording is retained as a sample only.
+ 
+-- Separate notification preferences for task completion, tool approval, and conversation-choice requests.
+-- Choose custom popup, Codex native notification, both, or off for each category.
+-- Edit a title and description per category; adjust popup width, height, and four colors with a live preview.
+-- Pause temporarily, disable this companion persistently, or uninstall it.
+-- No network calls. The hook passes only event type and an opaque event/turn ID to the local companion. It does not store or transmit prompts, command text, or key/mouse input.
++Saving channels synchronizes three notification preferences in the user-level `config.toml` `[desktop]` section. Custom-only/off disables the corresponding native notification; native/both enables it. This affects Codex globally, not just one chat. Restart Codex to reload native preferences. Windows notification permission, native wording, and duration remain controlled by the OS/app.
+ 
+-## Event support
++Verified against Desktop `26.1007.2314.0`: `notifications-turn-mode` accepts `off/unfocused/always`; `notifications-permissions-enabled` and `notifications-questions-enabled` are booleans. This companion uses `always` when enabling native completion. [Official notifications guide](https://learn.chatgpt.com/docs/notifications)
+ 
+-- **Task completed:** Codex `Stop` hook.
+-- **Tool approval:** Codex `PermissionRequest` hook. The hook never approves or denies the request; Codex's normal approval prompt and policy remain in control.
+-- **Conversation choice/input:** Codex Desktop's native question notification is the supported fallback. The current public Hook API does not expose a stable custom event for every conversation-choice prompt, so selecting a custom popup for this category falls back to the native notification. The app does not guess from message punctuation or text.
++## Events
+ 
+-Defaults for a new settings file are custom popups for task completion and tool approval, and Codex native notifications for conversation-choice requests. An existing settings file keeps the user's saved channel choices.
++Completion uses the `Stop` hook: the assistant turn ended, not necessarily the user's overall task. A turn ending with a question can also trigger it.
+ 
+-`Stop` marks the end of an assistant turn, not proof that the user's overall task is finished. If the assistant ends a turn by asking a question, the custom completion popup may appear alongside Codex's native question notification. The default remains the custom completion popup; choose native or off for completion if you prefer to avoid that pairing.
++`PermissionRequest` is retained for diagnosis only and never returns an approval decision. It can fire before automatic review, so it does not reliably mean a human must act. It no longer generates a custom popup.
+ 
+-Codex native notifications are managed by Codex and Windows. This app does not change those settings. Enable the relevant notification category in Codex Settings and allow Windows notifications for the ChatGPT/Codex app. Native notification wording and duration remain controlled by Codex/Windows. See the [Codex notifications guide](https://learn.chatgpt.com/docs/notifications).
++The protocol has structured waiting states, but a reliable external subscription to the running desktop instance has not been validated. Custom approval/choice notification is unavailable. The app does not guess from punctuation or reply text. Queue/priority machinery is retained for a future validated event source.
+ 
+-## Build
++v1 targets Windows Codex Desktop only. CLI, WSL, remote/service sessions, and cloud-orchestrated local hooks are not promised.
+ 
+-Requirements: Windows with .NET Framework 4.x and Windows PowerShell.
++## Build and install
+ 
+-```powershell
+-.\build.ps1
+-```
+-
+-The build compiles `CodexReminder.exe` and `CodexReminderHook.exe` into `dist/` and runs the built-in settings/route self-tests.
+-
+-## Install and update
+-
+-For a prebuilt install, download the Windows ZIP from GitHub Releases, extract it, and run `install.ps1` in PowerShell. The included binaries are unsigned; see the release trust note below.
+-
+-To build from source, clone the repository and run `build.ps1` first, then `install.ps1`:
++Requires Windows, .NET Framework 4.x, and Windows PowerShell. From source:
+ 
+ ```powershell
++.\build.ps1
+ .\install.ps1
+ ```
+ 
+-The installer builds the app, copies it to `%USERPROFILE%\.codex\codex-reminder`, merges only this app's `Stop` and `PermissionRequest` handlers into `%USERPROFILE%\.codex\hooks.json`, and adds a per-user Startup entry. Existing hooks and Codex notification settings are preserved.
+-
+-Restart Codex and review/trust the updated hook definitions when prompted. Hooks that have not been reviewed and trusted are skipped by Codex.
++For prebuilt installation, extract the Release ZIP and run `install.ps1` from your own Windows PowerShell. Installation copies binaries to `%USERPROFILE%\.codex\codex-reminder`, merges owned Stop/PermissionRequest hooks, and creates a user Startup entry. Installation itself does not change native notification preferences; saving channels does.
+ 
+-## Settings
++Restart Codex and review/trust changed hook definitions. Start the tray app from File Explorer, not a Codex isolated terminal: the latter may place it on an invisible `CodexSandboxDesktop`. The hook avoids auto-starting it on that isolated desktop.
+ 
+-Right-click the tray icon and choose **提醒设置…**. Settings are saved per Windows user under `%LOCALAPPDATA%\CodexCompletionReminder\settings.json`.
++## Settings and configuration safety
+ 
+-- The global switch and per-event channel choices control this companion's custom popups. The native Codex channel is still controlled by Codex/Windows settings.
+-- For the conversation-choice category, the settings window explains that custom event detection is unavailable and native notifications are used as fallback.
+-- The temporary pause only applies until the app exits. The global switch persists across restarts.
+-- Choosing **退出提醒器** closes the current process; it does not uninstall the hook or disable a future launch. Use the global switch to disable reminders or run the uninstaller to remove the integration.
++Right-click the tray icon and choose **提醒设置…**. Preferences are stored in `%LOCALAPPDATA%\CodexCompletionReminder\settings.json`.
+ 
+-## Troubleshooting missing reminders
++Only the three notification keys are changed. Other fields, comments, and line endings are preserved. The previous config is backed up to `config.toml.codex-reminder-notifications.bak`. Duplicate or unsupported target syntax is rejected. If JSON persistence fails, the companion rolls back its native-config update.
+ 
+-The installer uses an explicit PowerShell invocation and the JSON `commandWindows` override. A bare quoted executable path evaluates to a string in PowerShell instead of running the program. Review and trust the changed hook definitions in Codex after updating their commands.
++The global enable switch controls custom popups only. Pause lasts until exit. Exiting does not uninstall hooks; a later completion can start the helper again. Windows notification permissions must still be granted separately for native notifications.
+ 
+-Start the tray app from Windows File Explorer. Launching it from a Codex isolated terminal may place its windows on `CodexSandboxDesktop`, invisible on the user's interactive desktop. The hook does not auto-start the app on that isolated desktop.
++## Diagnostics and tests
+ 
+-`%LOCALAPPDATA%\CodexCompletionReminder\hook-status.log` records only event type and transport status. It contains no conversation, command, keyboard, or mouse content. `received-Stop` means the hook ran; `pipe-written` means the message was written, not that a user saw the popup. `pipe-error-UnauthorizedAccessException` indicates a permission boundary blocked transport. Normal hook completion and approval contracts remain unchanged.
++`hook-status.log` next to settings contains only startup, event type, and transport status. No prompts, commands, or keyboard/mouse input are logged. This companion makes no network calls; local IPC carries only event kind and opaque ID.
+ 
+-Use `CodexReminderHook.exe --diagnostic` with a test event in the user's own PowerShell to get a nonzero exit code on transport failure. Tests in Codex's isolated tools can be denied access. A zero hook exit code or a window's visible flag is not an end-to-end desktop acceptance test.
+-
+-## Uninstall
+-
+-```powershell
+-.\uninstall.ps1
+-```
+-
+-Uninstall removes only this app's hook handlers and Startup entry. It keeps user settings by default. To also remove the settings file:
+-
+-```powershell
+-.\uninstall.ps1 -RemoveSettings
+-```
++`received-Stop` confirms hook invocation; `pipe-written` confirms writing, not visual delivery. Isolated-terminal tests can be denied access. Zero exit codes and visible window flags are not desktop acceptance evidence. Feed a test event to `CodexReminderHook.exe --diagnostic` for a nonzero status on transport failure.
+ 
+-## Tests
++Installed hook commands explicitly invoke PowerShell and use JSON `commandWindows`, avoiding bare quoted paths that only print a string.
+ 
+ ```powershell
+ .\tests\Run-Tests.ps1
+ ```
+ 
+-The automated tests cover defaults, config serialization and normalization, channel routing, hook output behavior, and safe install/uninstall merging. The release checklist also requires a manual desktop test for foreground/background popups, key/mouse dismissal, click-through, Codex native notification fallback, and multi-monitor sizing.
++Tests cover settings, routing, native-config preservation/rollback, hook output contracts, shell execution with spaces in paths, and safe install/uninstall. Clean-Windows, foreground/background, input pass-through, multiple displays, and DPI still require manual acceptance.
+ 
+-## Release trust
++## Uninstall and release
+ 
+-GitHub Release executables are unsigned. Verify the SHA-256 file attached to a release, or build from source. Windows may show a SmartScreen warning for unsigned binaries.
++Run `uninstall.ps1` to remove owned hooks, Startup entry, and binaries while preserving unrelated hooks. User settings and chosen native notification states remain. To restore native alerts, select native and save before uninstalling, or re-enable them in Codex Settings. Do not overwrite later config changes with an entire old backup.
+ 
+-## License
++`uninstall.ps1 -RemoveSettings` also removes companion settings and diagnostic logs.
+ 
+-MIT. See [LICENSE](LICENSE).
++Release executables are unsigned. Verify SHA-256 or build from source. MIT; see [LICENSE](LICENSE).
+diff --git a/README.zh-CN.md b/README.zh-CN.md
+index c5b515b..8e0f3bc 100644
+--- a/README.zh-CN.md
++++ b/README.zh-CN.md
+@@ -1,96 +1,68 @@
+ # Codex Windows 完成提醒器
+ 
+-一个面向 Windows Codex 桌面端的托盘提醒工具。任务完成或 Codex 请求工具权限时，它会显示一个置顶但不抢键盘焦点的浮窗。浮窗可通过键盘任意键或鼠标按键关闭，输入会继续传递给下层应用。
++面向 Windows Codex 桌面端的独立托盘工具。回复回合结束时显示置顶、不抢焦点的浮窗；键盘或鼠标按键可关闭，输入继续传递给当前应用。
+ 
+-v1 仅支持 **Windows 上的 Codex 桌面端**，不承诺支持 Codex CLI、WSL、远程会话或服务会话。
++## 提醒渠道
+ 
+-## 功能
++- 任务完成：仅自定义浮窗、仅原生通知、两者或全部关闭。
++- 权限审批和对话选择：自定义暂不可用，只能明确选择原生或关闭，不自动回退原生。
++- 默认完成仅自定义，审批和对话选择关闭。旧版未可靠支持的自定义审批/选择会规范化为关闭；已有明确选择的原生设置保留。
++- 每类文案和共享的尺寸、四种颜色可配置，支持预览和恢复默认。未支持事件的文案仅为保留样例。
++- 全局开关只控制自定义浮窗；临时暂停持续到程序退出。
+ 
+-- 分别设置任务完成、工具权限审批、对话选择请求的提醒方式。
+-- 每类可选择自定义浮窗、Codex 原生通知、两者或关闭。
+-- 每类分别编辑标题与说明；自定义弹窗可调整宽度、高度及四种颜色，并实时预览。
+-- 支持临时暂停、持久关闭本插件提醒或卸载。
+-- 不联网。Hook 只向本机托盘程序传递事件类型和不透明的事件/回合 ID，不保存或发送提示词、命令文本、键盘或鼠标输入。
++保存渠道会同步修改用户级 `config.toml` 的 `[desktop]` 原生通知配置。仅自定义或全部关闭会关闭对应原生；原生或两者会启用它。此变更影响 Codex 全局，而非单一对话。请重启 Codex 使原生配置重新加载；Windows 通知权限、原生文案和时长仍由 Codex/系统管理。
+ 
+-## 事件支持
++配置键核实于桌面应用 `26.1007.2314.0`：完成键 `notifications-turn-mode` 使用 `off/unfocused/always`；审批键 `notifications-permissions-enabled` 和问题键 `notifications-questions-enabled` 使用布尔值。本工具启用原生完成时设为 `always`。[官方通知说明](https://learn.chatgpt.com/docs/notifications)
+ 
+-- **任务完成：**使用 Codex `Stop` Hook。
+-- **工具权限审批：**使用 Codex `PermissionRequest` Hook。Hook 不会替用户批准或拒绝，Codex 原有审批界面和策略保持生效。
+-- **对话选择/输入：**当前使用 Codex 桌面端的原生问题通知作为受支持的回退。现行公开 Hook API 没有能稳定捕捉所有对话选择请求的自定义事件，因此该类选择自定义浮窗时会回退到原生通知。本工具不会通过问号或回复文本猜测。
++## 事件与支持边界
+ 
+-首次创建设置时，任务完成和权限审批默认使用自定义浮窗；对话选择请求默认使用 Codex 原生通知。已有设置文件中的渠道选择会保留。
++完成使用 `Stop` Hook，表示当前一轮回复结束，不保证用户整体任务已经完成；助手以提问结束回复时也可能触发。
+ 
+-`Stop` 表示助手当前一轮回复结束，不代表用户的整体任务一定完成。如果助手以提问结束一轮，自定义完成浮窗可能与 Codex 原生问题通知同时出现。默认仍启用自定义完成浮窗；若想避免这类并发提醒，可将完成提醒改为原生通知或关闭。
++保留 `PermissionRequest` Hook 的诊断记录，但不再据此显示确认浮窗，因为它也会在自动审批之前触发，不能代表用户需要操作。Hook 不返回审批决定。
+ 
+-Codex 原生通知由 Codex 和 Windows 管理，本工具不会修改相关设置。请在 Codex 设置中打开对应的问题/权限通知，并允许 Windows 向 ChatGPT/Codex 应用发送通知。原生通知的内容和停留时间仍由 Codex/Windows 控制。详见 [Codex 通知说明](https://learn.chatgpt.com/docs/notifications)。
++协议中存在结构化等待状态，但尚未验证本工具能安全订阅正在运行的桌面端。审批/选择自定义暂不可用，不通过问号或回复文本猜测。排队与合并机制保留供未来经过验证的事件源使用。
+ 
+-## 构建
++首版仅面向 Windows Codex 桌面端，不承诺 CLI、WSL、远程/服务会话或云端编排的本地 Hook 支持。
+ 
+-需要 Windows、.NET Framework 4.x 和 Windows PowerShell。
++## 构建与安装
+ 
+-```powershell
+-.\build.ps1
+-```
+-
+-构建会生成 `dist\CodexReminder.exe` 与 `dist\CodexReminderHook.exe`，并运行内置设置/路由自测。
+-
+-## 安装和更新
+-
+-使用预编译版本时，从 GitHub Releases 下载 Windows ZIP，解压后在 PowerShell 中运行 `install.ps1`。Release 中的程序未签名，详见下方安全说明。
+-
+-从源码安装时，先克隆仓库并运行 `build.ps1`，再运行 `install.ps1`：
++需要 Windows、.NET Framework 4.x 和 Windows PowerShell。源码构建：
+ 
+ ```powershell
++.\build.ps1
+ .\install.ps1
+ ```
+ 
+-安装脚本会构建程序、复制到 `%USERPROFILE%\.codex\codex-reminder`，将本工具的 `Stop` 和 `PermissionRequest` Hook 合并到 `%USERPROFILE%\.codex\hooks.json`，并创建当前用户的登录启动项。其他 Hook 和 Codex 原生通知设置会保留。
+-
+-重启 Codex，并在提示时审核、信任更新后的 Hook 定义。未审核并信任的 Hook 会被 Codex 跳过。
++预编译版本：解压 Release ZIP，在自己的 Windows PowerShell 中运行 `install.ps1`。安装器将程序复制到 `%USERPROFILE%\.codex\codex-reminder`，合并本工具的 Stop/PermissionRequest Hook 并创建用户登录启动项。安装本身不修改原生通知选择；保存渠道时才同步。
+ 
+-## 设置
++重启 Codex，在 Hooks 中审核并信任变更后的定义。不要从 Codex 隔离终端启动或重启生产托盘程序：其窗口可能被启动到不可见的 `CodexSandboxDesktop`。Hook 检测到该桌面时不会自动启动不可见程序。
+ 
+-右键托盘图标，选择 **提醒设置…**。设置按 Windows 用户保存到 `%LOCALAPPDATA%\CodexCompletionReminder\settings.json`。
++## 设置与配置安全
+ 
+-- 全局开关和各事件的提醒渠道控制本插件的自定义浮窗。Codex 原生通知仍由 Codex/Windows 设置控制。
+-- 对话选择请求页面会说明：当前无法通过稳定自定义事件识别这类状态，因此使用原生通知回退。
+-- 临时暂停只持续到程序退出；全局开关会跨重启保存。
+-- **退出提醒器**只关闭当前进程，不会卸载 Hook，也不阻止下次事件重新启动。要禁用提醒请关闭全局开关；要移除集成请运行卸载脚本。
++右键托盘图标选择“提醒设置…”。设置保存在 `%LOCALAPPDATA%\CodexCompletionReminder\settings.json`。
+ 
+-## 排查提醒未显示
++同步只修改上述三个原生通知键，保留其他配置、注释与行尾。修改前备份为 `config.toml.codex-reminder-notifications.bak`。重复或不支持的目标配置格式会拒绝保存；提醒器 JSON 保存失败时回滚本次原生修改。
+ 
+-安装器使用显式 PowerShell 调用，并在 JSON 中设置 `commandWindows`。仅写带引号的程序路径会被 PowerShell 当成字符串输出，而不是执行程序。更新 Hook 命令后，请在 Codex 中重新审核并信任变更后的定义。
++选择“仅原生”不会替 Windows 授权系统通知权限。选择“退出”只关闭当前进程，后续完成事件可能重新启动它；停用自定义提醒请关闭全局开关。
+ 
+-请从 Windows 文件资源管理器启动提醒器。不要从 Codex 隔离终端重启托盘程序：其窗口可能被启动到 `CodexSandboxDesktop`，用户实际桌面上不会显示它。Hook 检测到该隔离桌面时不会自动启动不可见的提醒器。
++## 排查与测试
+ 
+-Hook 在 `%LOCALAPPDATA%\CodexCompletionReminder\hook-status.log` 记录事件类型和通信状态，不记录对话、命令或键鼠内容。`received-Stop` 表示 Hook 被调用，`pipe-written` 只表示事件已写入通信通道，不证明用户看到了浮窗。`pipe-error-UnauthorizedAccessException` 表示通信被权限边界阻止。正常 Hook 仍保留原来的完成与审批语义。
++`hook-status.log` 与设置位于同一目录，只记录启动、事件类型与通信状态，不记录对话、命令或键鼠内容。本工具不联网；本地消息只传事件类型和不透明 ID。
+ 
+-在用户自己的 PowerShell 中，可用 `CodexReminderHook.exe --diagnostic` 接收测试事件；此模式在通信失败时返回非零退出码。Codex 隔离工具中的测试可能被拒绝访问，不能以退出码 0 或窗口接口的“可见”状态作为桌面验收依据。
+-
+-## 卸载
+-
+-```powershell
+-.\uninstall.ps1
+-```
+-
+-卸载只删除本工具管理的 Hook 和登录启动项，默认保留用户设置。若也要删除设置文件：
+-
+-```powershell
+-.\uninstall.ps1 -RemoveSettings
+-```
++`received-Stop` 表示 Hook 收到事件；`pipe-written` 只表示已写入通道，不证明用户看见浮窗。隔离终端测试可能被拒绝访问；不要把零退出码或窗口“可见”状态当作视觉验收。手动诊断可向 `CodexReminderHook.exe --diagnostic` 提供测试事件，通信失败时返回非零码。
+ 
+-## 测试
++安装命令使用显式 PowerShell 调用及 JSON `commandWindows` 字段，避免裸引号路径只输出字符串。
+ 
+ ```powershell
+ .\tests\Run-Tests.ps1
+ ```
+ 
+-自动测试覆盖默认值、配置序列化与规范化、渠道路由、Hook 输出和安装/卸载合并。发布前还需手动验证 Codex 前后台弹窗、键盘/鼠标关闭、点击穿透、原生通知回退和多显示器尺寸。
++测试覆盖设置、渠道、原生配置保留/回滚、Hook 输出、含空格路径的实际命令调用和安装卸载。发布前仍需干净 Windows、前后台、输入穿透、多显示器及 DPI 的手动验收。
+ 
+-## Release 信任说明
++## 卸载与发布
+ 
+-GitHub Release 中的可执行文件没有代码签名。请核对随 Release 提供的 SHA-256，或从源码自行构建。Windows 可能显示 SmartScreen 提示。
++运行 `uninstall.ps1` 移除本工具的 Hook、启动项和程序；其他 Hook 保留。默认保留用户设置与用户选择的原生通知状态。需要恢复原生提醒时，请先选择原生并保存，或在 Codex 通知设置中重新开启。不要整份旧配置覆盖后来修改的其他配置。
+ 
+-## 许可证
++`uninstall.ps1 -RemoveSettings` 同时删除提醒器设置与状态日志。
+ 
+-MIT，详见 [LICENSE](LICENSE)。
++Release 可执行文件未签名，请核对 SHA-256 或从源码构建。MIT，详见 [LICENSE](LICENSE)。
+diff --git a/build.ps1 b/build.ps1
+index a3f1760..dbccf9a 100644
+--- a/build.ps1
++++ b/build.ps1
+@@ -19,6 +19,7 @@ $appArgs = @(
+     '/nologo', '/target:winexe', "/out:$(Join-Path $dist 'CodexReminder.exe')",
+     '/reference:System.Windows.Forms.dll', '/reference:System.Drawing.dll', '/reference:System.Web.Extensions.dll',
+     (Join-Path $root 'src\ReminderSettings.cs'),
++    (Join-Path $root 'src\NativeNotificationSettings.cs'),
+     (Join-Path $root 'src\ReminderSettingsForm.cs'),
+     (Join-Path $root 'src\Program.cs'),
+     (Join-Path $root 'src\SelfTests.cs')
+diff --git a/src/Program.cs b/src/Program.cs
+index b073985..3b33327 100644
+--- a/src/Program.cs
++++ b/src/Program.cs
+@@ -17,6 +17,11 @@ namespace CodexCompletionReminder
+         {
+             if (Array.IndexOf(args, "--self-test") >= 0)
+                 return SelfTests.Run();
++            if (Array.IndexOf(args, "--apply-native-settings") >= 0)
++            {
++                try { NativeNotificationSettings.Save(SettingsStore.Load()); return 0; }
++                catch (Exception ex) { Console.Error.WriteLine(ex.Message); return 1; }
++            }
+ 
+             bool testPopup = Array.IndexOf(args, "--test-popup") >= 0;
+             bool createdNew;
+@@ -120,7 +125,6 @@ namespace CodexCompletionReminder
+             {
+                 if (form.ShowDialog() != DialogResult.OK) return;
+                 settings = form.ResultSettings;
+-                SaveSettings();
+                 ClearPendingAndClose();
+                 RefreshEnabledMenu();
+             }
+diff --git a/src/ReminderSettings.cs b/src/ReminderSettings.cs
+index 44ad56f..01763d3 100644
+--- a/src/ReminderSettings.cs
++++ b/src/ReminderSettings.cs
+@@ -25,8 +25,8 @@ namespace CodexCompletionReminder
+     {
+         public bool Enabled = true;
+         public string CompletionChannel = ReminderChannels.Custom;
+-        public string PermissionChannel = ReminderChannels.Custom;
+-        public string ChoiceChannel = ReminderChannels.Native;
++        public string PermissionChannel = ReminderChannels.Off;
++        public string ChoiceChannel = ReminderChannels.Off;
+ 
+         public string CompletionTitle = "任务已完成";
+         public string CompletionDescription = "按任意键或点击鼠标关闭提醒";
+@@ -56,8 +56,14 @@ namespace CodexCompletionReminder
+         public void Normalize()
+         {
+             CompletionChannel = NormalizeChannel(CompletionChannel, ReminderChannels.Custom);
+-            PermissionChannel = NormalizeChannel(PermissionChannel, ReminderChannels.Custom);
+-            ChoiceChannel = NormalizeChannel(ChoiceChannel, ReminderChannels.Native);
++            PermissionChannel = NormalizeChannel(PermissionChannel, ReminderChannels.Off);
++            ChoiceChannel = NormalizeChannel(ChoiceChannel, ReminderChannels.Off);
++            // Raw approval hooks also fire for auto-review. Unsupported custom modes
++            // are disabled explicitly; never silently enable a native fallback.
++            if (PermissionChannel == ReminderChannels.Custom || PermissionChannel == ReminderChannels.Both)
++                PermissionChannel = ReminderChannels.Off;
++            if (ChoiceChannel == ReminderChannels.Custom || ChoiceChannel == ReminderChannels.Both)
++                ChoiceChannel = ReminderChannels.Off;
+             CompletionTitle = NormalizeText(CompletionTitle, "任务已完成", 100);
+             CompletionDescription = NormalizeText(CompletionDescription, "按任意键或点击鼠标关闭提醒", 180);
+             PermissionTitle = NormalizeText(PermissionTitle, "任务需确认", 100);
+@@ -99,6 +105,7 @@ namespace CodexCompletionReminder
+         public bool WantsCustomPopup(string kind, bool choiceSourceAvailable)
+         {
+             if (!Enabled) return false;
++            if (kind == ReminderKinds.Permission) return false;
+             string channel = GetChannel(kind);
+             bool selected = channel == ReminderChannels.Custom || channel == ReminderChannels.Both;
+             if (!selected) return false;
+diff --git a/src/ReminderSettingsForm.cs b/src/ReminderSettingsForm.cs
+index 2359d2d..f151048 100644
+--- a/src/ReminderSettingsForm.cs
++++ b/src/ReminderSettingsForm.cs
+@@ -50,18 +50,26 @@ namespace CodexCompletionReminder
+             tabs.TabPages.Add(BuildAppearancePage());
+             Controls.Add(tabs);
+ 
+-            Panel buttons = new Panel { Dock = DockStyle.Bottom, Height = 50 };
+-            Button reset = new Button { Text = "恢复默认", Width = 100, Height = 30, Left = 18, Top = 10 };
++            Panel buttons = new Panel { Dock = DockStyle.Bottom, Height = 94, Width = ClientSize.Width };
++            Label saveHint = new Label { Text = "保存渠道会同步 Codex 全局的同类原生通知；请重启 Codex 使原生配置重新加载。\n未支持的自定义确认提醒不会自动回退原生。", Left = 18, Top = 6, Width = ClientSize.Width - 36, Height = 40 };
++            buttons.Controls.Add(saveHint);
++            Button reset = new Button { Text = "恢复默认", Width = 100, Height = 30, Left = 18, Top = 52 };
+             reset.Click += delegate { ResetDefaults(); };
+-            Button save = new Button { Text = "保存", Width = 100, Height = 30, Left = ClientSize.Width - 224, Top = 10, Anchor = AnchorStyles.Right | AnchorStyles.Top };
++            Button save = new Button { Text = "保存", Width = 100, Height = 30, Left = ClientSize.Width - 224, Top = 52, Anchor = AnchorStyles.Right | AnchorStyles.Top };
+             save.Click += delegate
+             {
+                 working.Normalize();
++                try { NativeNotificationSettings.Save(working); }
++                catch (Exception ex)
++                {
++                    MessageBox.Show(this, "设置未保存：" + ex.Message, "保存失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
++                    return;
++                }
+                 ResultSettings = working;
+                 DialogResult = DialogResult.OK;
+                 Close();
+             };
+-            Button cancel = new Button { Text = "取消", Width = 100, Height = 30, Left = ClientSize.Width - 112, Top = 10, Anchor = AnchorStyles.Right | AnchorStyles.Top };
++            Button cancel = new Button { Text = "取消", Width = 100, Height = 30, Left = ClientSize.Width - 112, Top = 52, Anchor = AnchorStyles.Right | AnchorStyles.Top };
+             cancel.Click += delegate { DialogResult = DialogResult.Cancel; Close(); };
+             buttons.Controls.Add(reset);
+             buttons.Controls.Add(save);
+@@ -75,37 +83,39 @@ namespace CodexCompletionReminder
+         private TabPage BuildEventsPage()
+         {
+             TabPage page = new TabPage("提醒类型") { AutoScroll = true };
+-            globalEnabled = new CheckBox { Text = "启用本插件的自定义浮窗（不更改 Codex 原生通知设置）", Left = 20, Top = 14, AutoSize = true };
++            globalEnabled = new CheckBox { Text = "启用本工具的自定义浮窗", Left = 20, Top = 14, AutoSize = true };
+             globalEnabled.CheckedChanged += delegate
+             {
+                 if (!loading) working.Enabled = globalEnabled.Checked;
+             };
+             page.Controls.Add(globalEnabled);
+ 
+-            completionChannel = NewChannelCombo();
++            completionChannel = NewChannelCombo(true);
+             completionTitle = NewTextBox(100);
+             completionDescription = NewTextBox(180);
+             page.Controls.Add(BuildEventGroup("任务完成", 48, 170, completionChannel, completionTitle, completionDescription,
+-                "Stop Hook 表示当前回复结束；助手提问等待你回复时也可能触发，因此可能同时出现完成浮窗和 Codex 原生问题通知。"));
++                "仅自定义会关闭原生完成通知；仅原生或两者会启用原生完成通知。Stop 表示回复结束，不保证整体任务完成。"));
+ 
+-            permissionChannel = NewChannelCombo();
++            permissionChannel = NewChannelCombo(false);
+             permissionTitle = NewTextBox(100);
+             permissionDescription = NewTextBox(180);
+-            page.Controls.Add(BuildEventGroup("权限审批", 227, 150, permissionChannel, permissionTitle, permissionDescription,
+-                "例如运行命令或访问网络前，需要你批准。"));
++            permissionTitle.Enabled = false;
++            permissionDescription.Enabled = false;
++            page.Controls.Add(BuildEventGroup("权限审批（自定义暂不可用）", 227, 170, permissionChannel, permissionTitle, permissionDescription,
++                "审批 Hook 也会在自动审批时触发，不能代表你需要操作。当前只支持明确选择原生或关闭，不自动回退原生。"));
+ 
+-            choiceChannel = NewChannelCombo();
++            choiceChannel = NewChannelCombo(false);
+             choiceTitle = NewTextBox(100);
+             choiceDescription = NewTextBox(180);
+-            string choiceHint = choiceSourceAvailable
+-                ? "Codex 已提供可监听的选择请求事件。"
+-                : "当前版本无法通过自定义 Hook 可靠识别对话选择请求；选择自定义浮窗时将回退到 Codex 原生通知。";
+-            page.Controls.Add(BuildEventGroup("对话选择请求", 386, 184, choiceChannel, choiceTitle, choiceDescription, choiceHint));
++            choiceTitle.Enabled = false;
++            choiceDescription.Enabled = false;
++            string choiceHint = "尚未验证能订阅当前桌面端的实际等待输入事件。当前只支持明确选择原生或关闭，不自动回退原生。";
++            page.Controls.Add(BuildEventGroup("对话选择请求（自定义暂不可用）", 406, 170, choiceChannel, choiceTitle, choiceDescription, choiceHint));
+ 
+             Label nativeHint = new Label
+             {
+-                Text = "原生通知由 Codex 与 Windows 设置控制，本插件不会更改它们。选择“两者都要”时可能出现双重提醒；原生通知开关需在 Codex/Windows 中管理。",
+-                Left = 20, Top = 582, Width = 690, Height = 45, AutoSize = false
++                Text = "保存渠道会同步修改 Codex 全局的同类原生通知，并备份原配置。请重启 Codex 使原生配置重新加载。Windows 的通知权限仍需单独允许。",
++                Left = 20, Top = 587, Width = 690, Height = 48, AutoSize = false
+             };
+             page.Controls.Add(nativeHint);
+             return page;
+@@ -218,13 +228,13 @@ namespace CodexCompletionReminder
+             UpdatePreview();
+         }
+ 
+-        private ComboBox NewChannelCombo()
++        private ComboBox NewChannelCombo(bool supportsCustom)
+         {
+             ComboBox combo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
+-            combo.Items.Add(new KeyValuePair<string, string>(ReminderChannels.Custom, "自定义浮窗"));
+-            combo.Items.Add(new KeyValuePair<string, string>(ReminderChannels.Native, "Codex 原生通知"));
+-            combo.Items.Add(new KeyValuePair<string, string>(ReminderChannels.Both, "两者都要"));
+-            combo.Items.Add(new KeyValuePair<string, string>(ReminderChannels.Off, "关闭本插件此类浮窗"));
++            if (supportsCustom) combo.Items.Add(new KeyValuePair<string, string>(ReminderChannels.Custom, "仅自定义浮窗（关闭原生）"));
++            combo.Items.Add(new KeyValuePair<string, string>(ReminderChannels.Native, "仅 Codex 原生通知"));
++            if (supportsCustom) combo.Items.Add(new KeyValuePair<string, string>(ReminderChannels.Both, "自定义与原生都启用"));
++            combo.Items.Add(new KeyValuePair<string, string>(ReminderChannels.Off, "全部关闭"));
+             combo.DisplayMember = "Value";
+             combo.ValueMember = "Key";
+             combo.SelectedValueChanged += ChannelChanged;
+diff --git a/src/SelfTests.cs b/src/SelfTests.cs
+index 66ebd6f..286a455 100644
+--- a/src/SelfTests.cs
++++ b/src/SelfTests.cs
+@@ -19,6 +19,17 @@ namespace CodexCompletionReminder
+                 using (ReminderSettingsForm form = new ReminderSettingsForm(defaults.Clone(), false))
+                 {
+                     Assert(form.Text == "Codex 完成提醒器设置", "settings window initializes");
++                    form.PerformLayout();
++                    int reachableActions = 0;
++                    foreach (System.Windows.Forms.Control panel in form.Controls)
++                        foreach (System.Windows.Forms.Control child in panel.Controls)
++                            if (child is System.Windows.Forms.Button && (child.Text == "保存" || child.Text == "取消"))
++                            {
++                                Assert(child.Left >= 0 && child.Right <= panel.ClientSize.Width && child.Bottom <= panel.ClientSize.Height,
++                                    "primary settings actions stay within the visible panel");
++                                reachableActions++;
++                            }
++                    Assert(reachableActions == 2, "save and cancel actions available");
+                     passed++;
+                 }
+ 
+@@ -69,20 +80,66 @@ namespace CodexCompletionReminder
+ 
+                 ReminderSettings routing = ReminderSettings.Defaults();
+                 Assert(routing.WantsCustomPopup(ReminderKinds.Completion, false), "completion custom route");
+-                Assert(routing.WantsCustomPopup(ReminderKinds.Permission, false), "permission custom route");
++                Assert(!routing.WantsCustomPopup(ReminderKinds.Permission, false), "raw approval hook cannot trigger a human-wait popup");
+                 routing.ChoiceChannel = ReminderChannels.Custom;
+-                Assert(!routing.WantsCustomPopup(ReminderKinds.Choice, false), "unsupported choice source falls back to native");
+-                Assert(routing.WantsCustomPopup(ReminderKinds.Choice, true), "choice custom route when source exists");
++                routing.PermissionChannel = ReminderChannels.Both;
++                routing.Normalize();
++                Assert(routing.ChoiceChannel == ReminderChannels.Off && routing.PermissionChannel == ReminderChannels.Off,
++                    "unsupported custom modes are off, never a hidden native fallback");
+                 routing.PermissionChannel = ReminderChannels.Native;
+                 Assert(!routing.WantsCustomPopup(ReminderKinds.Permission, false), "native mode suppresses custom popup");
+                 routing.PermissionChannel = ReminderChannels.Off;
+                 Assert(!routing.WantsCustomPopup(ReminderKinds.Permission, false), "off mode suppresses custom popup");
+                 routing.PermissionChannel = ReminderChannels.Both;
+-                Assert(routing.WantsCustomPopup(ReminderKinds.Permission, false), "both mode includes custom popup");
++                Assert(!routing.WantsCustomPopup(ReminderKinds.Permission, false), "unsupported approval custom mode stays blocked");
+                 routing.Enabled = false;
+                 Assert(!routing.WantsCustomPopup(ReminderKinds.Completion, true), "global disable");
+                 passed++;
+ 
++                string fixture = "model = \"keep\"\r\n[desktop]\r\nnotifications-turn-mode = \"always\" # keep comment\r\nsansFontSize = 14\r\n[other]\r\nnotifications-turn-mode = \"unfocused\"\r\n";
++                ReminderSettings exclusive = ReminderSettings.Defaults();
++                string edited = NativeNotificationSettings.Edit(fixture, exclusive);
++                Assert(edited.Contains("notifications-turn-mode = \"off\" # keep comment") && edited.Contains("model = \"keep\"") &&
++                    edited.Contains("sansFontSize = 14") && edited.Contains("[other]\r\nnotifications-turn-mode = \"unfocused\""),
++                    "native update preserves unrelated keys, sections, comments and line endings");
++                Assert(edited.Contains("notifications-permissions-enabled = false") && edited.Contains("notifications-questions-enabled = false"),
++                    "custom-only defaults do not enable unsupported native fallbacks");
++                foreach (string channel in new string[] { ReminderChannels.Native, ReminderChannels.Both, ReminderChannels.Off })
++                {
++                    exclusive.CompletionChannel = channel;
++                    string result = NativeNotificationSettings.Edit(fixture, exclusive);
++                    Assert(result.Contains("notifications-turn-mode = \"" + (channel == ReminderChannels.Off ? "off" : "always") + "\" #"),
++                        "completion channel maps to native notification state");
++                }
++                Assert(NativeNotificationSettings.Edit("model = \"keep\"\n", exclusive).Contains("[desktop]"), "missing desktop section created");
++                bool rejected = false;
++                try { NativeNotificationSettings.Edit("[desktop]\n[desktop]\n", exclusive); }
++                catch (System.IO.InvalidDataException) { rejected = true; }
++                Assert(rejected, "duplicate tables rejected rather than corrupted");
++                passed++;
++
++                string nativeRoot = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "CodexReminder-native-selftest-" + Guid.NewGuid().ToString("N"));
++                System.IO.Directory.CreateDirectory(nativeRoot);
++                try
++                {
++                    string config = System.IO.Path.Combine(nativeRoot, "config.toml");
++                    string jsonPath = System.IO.Path.Combine(nativeRoot, "settings.json");
++                    System.IO.File.WriteAllText(config, fixture, new System.Text.UTF8Encoding(false));
++                    NativeNotificationSettings.SaveTo(ReminderSettings.Defaults(), jsonPath, config);
++                    Assert(SettingsStore.LoadFrom(jsonPath).CompletionChannel == ReminderChannels.Custom &&
++                        System.IO.File.ReadAllText(config).Contains("notifications-turn-mode = \"off\""), "both preference files saved");
++                    Assert(System.IO.File.ReadAllText(config + ".codex-reminder-notifications.bak") == fixture, "original native config backed up");
++                    System.IO.File.WriteAllText(config, fixture, new System.Text.UTF8Encoding(false));
++                    string blockedPath = System.IO.Path.Combine(nativeRoot, "blocked");
++                    System.IO.Directory.CreateDirectory(blockedPath);
++                    bool failed = false;
++                    try { NativeNotificationSettings.SaveTo(ReminderSettings.Defaults(), blockedPath, config); }
++                    catch (System.IO.IOException) { failed = true; }
++                    Assert(failed && System.IO.File.ReadAllText(config) == fixture, "native config rolls back when JSON persistence fails");
++                    passed++;
++                }
++                finally { System.IO.Directory.Delete(nativeRoot, true); }
++
+                 PendingNotificationQueue queue = new PendingNotificationQueue();
+                 queue.Add(ReminderKinds.Completion);
+                 queue.Add(ReminderKinds.Completion);

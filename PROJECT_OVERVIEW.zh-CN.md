@@ -37,7 +37,7 @@
 
 ## GitHub 推送边界
 
-本副本没有设置 Git 远程地址，也没有公开发布。源码可以作为早期预览项目公开；正式发布安装包前还需完成干净 Windows 环境及完整桌面验收。
+本副本已配置远端 https://github.com/w7885/codex-completion-reminder。源码按早期预览项目维护；正式发布安装包前还需完成干净 Windows 环境及完整桌面验收。实验程序不属于已安装功能，详见 docs/validation/2026-10-11-uia-probe.md。
 
 .gitignore 已排除编译文件、安装包、日志、备份及用户设置。建议 Git 仓库提交源码与文档，安装包作为 GitHub Release 附件上传，不要把用户级 hooks.json、config.toml 或运行日志加入仓库。
 
