@@ -18,6 +18,8 @@ This project targets **Codex Desktop on Windows**. Codex CLI, WSL, remote sessio
 - **Tool approval:** Codex `PermissionRequest` hook. The hook never approves or denies the request; Codex's normal approval prompt and policy remain in control.
 - **Conversation choice/input:** Codex Desktop's native question notification is the supported fallback. The current public Hook API does not expose a stable custom event for every conversation-choice prompt, so selecting a custom popup for this category falls back to the native notification. The app does not guess from message punctuation or text.
 
+Defaults for a new settings file are custom popups for task completion and tool approval, and Codex native notifications for conversation-choice requests. An existing settings file keeps the user's saved channel choices.
+
 `Stop` marks the end of an assistant turn, not proof that the user's overall task is finished. If the assistant ends a turn by asking a question, the custom completion popup may appear alongside Codex's native question notification. The default remains the custom completion popup; choose native or off for completion if you prefer to avoid that pairing.
 
 Codex native notifications are managed by Codex and Windows. This app does not change those settings. Enable the relevant notification category in Codex Settings and allow Windows notifications for the ChatGPT/Codex app. Native notification wording and duration remain controlled by Codex/Windows. See the [Codex notifications guide](https://learn.chatgpt.com/docs/notifications).
