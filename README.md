@@ -57,6 +57,14 @@ Right-click the tray icon and choose **提醒设置…**. Settings are saved per
 - The temporary pause only applies until the app exits. The global switch persists across restarts.
 - Choosing **退出提醒器** closes the current process; it does not uninstall the hook or disable a future launch. Use the global switch to disable reminders or run the uninstaller to remove the integration.
 
+## Troubleshooting missing reminders
+
+Start the tray app from Windows File Explorer. Launching it from a Codex isolated terminal may place its windows on `CodexSandboxDesktop`, invisible on the user's interactive desktop. The hook does not auto-start the app on that isolated desktop.
+
+`%LOCALAPPDATA%\CodexCompletionReminder\hook-status.log` records only event type and transport status. It contains no conversation, command, keyboard, or mouse content. `received-Stop` means the hook ran; `pipe-written` means the message was written, not that a user saw the popup. `pipe-error-UnauthorizedAccessException` indicates a permission boundary blocked transport. Normal hook completion and approval contracts remain unchanged.
+
+Use `CodexReminderHook.exe --diagnostic` with a test event in the user's own PowerShell to get a nonzero exit code on transport failure. Tests in Codex's isolated tools can be denied access. A zero hook exit code or a window's visible flag is not an end-to-end desktop acceptance test.
+
 ## Uninstall
 
 ```powershell

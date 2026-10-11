@@ -57,6 +57,14 @@ Codex 原生通知由 Codex 和 Windows 管理，本工具不会修改相关设�
 - 临时暂停只持续到程序退出；全局开关会跨重启保存。
 - **退出提醒器**只关闭当前进程，不会卸载 Hook，也不阻止下次事件重新启动。要禁用提醒请关闭全局开关；要移除集成请运行卸载脚本。
 
+## 排查提醒未显示
+
+请从 Windows 文件资源管理器启动提醒器。不要从 Codex 隔离终端重启托盘程序：其窗口可能被启动到 `CodexSandboxDesktop`，用户实际桌面上不会显示它。Hook 检测到该隔离桌面时不会自动启动不可见的提醒器。
+
+Hook 在 `%LOCALAPPDATA%\CodexCompletionReminder\hook-status.log` 记录事件类型和通信状态，不记录对话、命令或键鼠内容。`received-Stop` 表示 Hook 被调用，`pipe-written` 只表示事件已写入通信通道，不证明用户看到了浮窗。`pipe-error-UnauthorizedAccessException` 表示通信被权限边界阻止。正常 Hook 仍保留原来的完成与审批语义。
+
+在用户自己的 PowerShell 中，可用 `CodexReminderHook.exe --diagnostic` 接收测试事件；此模式在通信失败时返回非零退出码。Codex 隔离工具中的测试可能被拒绝访问，不能以退出码 0 或窗口接口的“可见”状态作为桌面验收依据。
+
 ## 卸载
 
 ```powershell
