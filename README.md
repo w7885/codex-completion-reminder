@@ -59,6 +59,8 @@ Right-click the tray icon and choose **提醒设置…**. Settings are saved per
 
 ## Troubleshooting missing reminders
 
+The installer uses an explicit PowerShell invocation and the JSON `commandWindows` override. A bare quoted executable path evaluates to a string in PowerShell instead of running the program. Review and trust the changed hook definitions in Codex after updating their commands.
+
 Start the tray app from Windows File Explorer. Launching it from a Codex isolated terminal may place its windows on `CodexSandboxDesktop`, invisible on the user's interactive desktop. The hook does not auto-start the app on that isolated desktop.
 
 `%LOCALAPPDATA%\CodexCompletionReminder\hook-status.log` records only event type and transport status. It contains no conversation, command, keyboard, or mouse content. `received-Stop` means the hook ran; `pipe-written` means the message was written, not that a user saw the popup. `pipe-error-UnauthorizedAccessException` indicates a permission boundary blocked transport. Normal hook completion and approval contracts remain unchanged.

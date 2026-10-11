@@ -59,6 +59,8 @@ Codex 原生通知由 Codex 和 Windows 管理，本工具不会修改相关设�
 
 ## 排查提醒未显示
 
+安装器使用显式 PowerShell 调用，并在 JSON 中设置 `commandWindows`。仅写带引号的程序路径会被 PowerShell 当成字符串输出，而不是执行程序。更新 Hook 命令后，请在 Codex 中重新审核并信任变更后的定义。
+
 请从 Windows 文件资源管理器启动提醒器。不要从 Codex 隔离终端重启托盘程序：其窗口可能被启动到 `CodexSandboxDesktop`，用户实际桌面上不会显示它。Hook 检测到该隔离桌面时不会自动启动不可见的提醒器。
 
 Hook 在 `%LOCALAPPDATA%\CodexCompletionReminder\hook-status.log` 记录事件类型和通信状态，不记录对话、命令或键鼠内容。`received-Stop` 表示 Hook 被调用，`pipe-written` 只表示事件已写入通信通道，不证明用户看到了浮窗。`pipe-error-UnauthorizedAccessException` 表示通信被权限边界阻止。正常 Hook 仍保留原来的完成与审批语义。

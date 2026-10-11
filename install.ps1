@@ -43,7 +43,7 @@ if (Test-Path -LiteralPath $startupPath) {
 
 function Test-ReminderHook($handler) {
     if ($null -eq $handler) { return $false }
-    $command = [string]$handler.command_windows + ' ' + [string]$handler.command
+    $command = [string]$handler.commandWindows + ' ' + [string]$handler.command_windows + ' ' + [string]$handler.command
     return $command -match '(?i)CodexReminderHook\.exe|codex_reminder_hook\.py'
 }
 
@@ -67,7 +67,7 @@ function Set-ReminderEventHook($document, [string]$eventName, [string]$commandLi
         hooks = @([pscustomobject]@{
             type = 'command'
             command = $commandLine
-            command_windows = $commandLine
+            commandWindows = $commandLine
             timeout = 3
         })
     }
@@ -118,7 +118,10 @@ try {
     Copy-Item -LiteralPath $hookSource -Destination (Join-Path $installDir 'CodexReminderHook.exe') -Force
     [System.IO.File]::WriteAllText($marker, "Codex Windows Completion Reminder`r`n", (New-Object System.Text.UTF8Encoding($false)))
 
-    $hookCommand = '"' + (Join-Path $installDir 'CodexReminderHook.exe') + '"'
+    # A bare quoted executable path is a string expression in PowerShell.
+    # Use an explicit invocation and the JSON schema's Windows override key.
+    $escapedHookPath = (Join-Path $installDir 'CodexReminderHook.exe').Replace("'", "''")
+    $hookCommand = 'powershell.exe -NoProfile -NonInteractive -Command "& ''' + $escapedHookPath + '''"'
     Set-ReminderEventHook $document 'Stop' $hookCommand
     Set-ReminderEventHook $document 'PermissionRequest' $hookCommand
     $hooksJson = ConvertTo-Json -InputObject $document -Depth 100

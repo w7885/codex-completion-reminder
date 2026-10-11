@@ -4,7 +4,7 @@ $build = Join-Path $root 'build.ps1'
 & $build
 if ($LASTEXITCODE -ne 0) { throw 'Build or application self-tests failed.' }
 
-$testRoot = Join-Path $env:TEMP ('CodexReminderTests-' + [Guid]::NewGuid().ToString('N'))
+$testRoot = Join-Path $env:TEMP ('Codex Reminder Tests-' + [Guid]::NewGuid().ToString('N'))
 $testCodexHome = Join-Path $testRoot 'codex-home'
 $testStartup = Join-Path $testRoot 'startup'
 $previousCodexHome = $env:CODEX_HOME
@@ -48,7 +48,7 @@ try {
     $startupFile = Join-Path $testStartup 'CodexCompletionReminder.vbs'
     [System.IO.File]::WriteAllText($startupFile, "' CodexCompletionReminder: launches the local helper hidden`r`n", (New-Object System.Text.UTF8Encoding($false)))
 
-    & (Join-Path $root 'install.ps1') -SkipBuild -CodexHome $testCodexHome -StartupDirectory $testStartup
+    & (Join-Path $root 'install.ps1') -SkipBuild -NoLaunch -CodexHome $testCodexHome -StartupDirectory $testStartup
     if ($LASTEXITCODE -ne 0) { throw 'Isolated install test failed.' }
     $installed = Get-Content -Raw $hooksPath | ConvertFrom-Json
     $stopCommands = @($installed.hooks.Stop | ForEach-Object { $_.hooks } | ForEach-Object { $_.command })
@@ -57,6 +57,16 @@ try {
     if (@($stopCommands | Where-Object { $_ -match 'CodexReminderHook\.exe' }).Count -ne 1) { throw 'Install left duplicate managed Stop hooks.' }
     $permissionCommands = @($installed.hooks.PermissionRequest | ForEach-Object { $_.hooks } | ForEach-Object { $_.command })
     if (-not (($permissionCommands -join ' ') -match 'CodexReminderHook\.exe')) { throw 'Install did not register PermissionRequest.' }
+    $managed = @($installed.hooks.Stop | ForEach-Object { $_.hooks } | Where-Object { $_.command -match 'CodexReminderHook\.exe' })[0]
+    if ($managed.commandWindows -ne $managed.command) { throw 'Windows JSON command override is missing.' }
+    $shellOutput = $stopPayload | powershell.exe -NoProfile -NonInteractive -Command $managed.commandWindows
+    if ($LASTEXITCODE -ne 0 -or ($shellOutput -join '') -notmatch '^\s*\{.*"continue"\s*:\s*true.*\}\s*$') {
+        throw 'Installed command must execute the bridge through PowerShell, including paths with spaces.'
+    }
+    $approvalOutput = $permissionPayload | powershell.exe -NoProfile -NonInteractive -Command $managed.commandWindows
+    if ($LASTEXITCODE -ne 0 -or -not [string]::IsNullOrWhiteSpace(($approvalOutput -join ''))) {
+        throw 'Installed approval command must preserve the no-decision stdout contract.'
+    }
     if (-not (Test-Path $startupFile)) { throw 'Install did not create its Startup entry.' }
     $startupText = Get-Content -Raw $startupFile
     if ($startupText -notmatch 'shell\.Run\s+""".*CodexReminder\.exe""",\s*0,\s*False') { throw 'Startup entry does not safely quote the executable path.' }

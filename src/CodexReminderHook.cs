@@ -17,6 +17,7 @@ namespace CodexCompletionReminder
 
         private static int Main(string[] args)
         {
+            Record("bridge-started");
             bool diagnostic = Array.IndexOf(args, "--diagnostic") >= 0;
             string json = Console.In.ReadToEnd();
             string eventName = ReadJsonString(json, "hook_event_name");
@@ -36,6 +37,7 @@ namespace CodexCompletionReminder
             }
             else
             {
+                Record("unrecognized-event");
                 if (eventName == "Stop") Console.Out.WriteLine("{\"continue\":true}");
                 return 0;
             }

@@ -20,7 +20,7 @@ $legacyStartupMarker = 'CodexCompletionReminder: launches the local helper hidde
 
 function Test-ReminderHook($handler) {
     if ($null -eq $handler) { return $false }
-    $command = [string]$handler.command_windows + ' ' + [string]$handler.command
+    $command = [string]$handler.commandWindows + ' ' + [string]$handler.command_windows + ' ' + [string]$handler.command
     return $command -match '(?i)CodexReminderHook\.exe|codex_reminder_hook\.py'
 }
 
