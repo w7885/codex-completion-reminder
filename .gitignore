@@ -1,0 +1,10 @@
+dist/
+release/
+*.zip
+SHA256SUMS.txt
+*.user
+*.suo
+*.tmp
+*.bak
+settings.json
+*.log
