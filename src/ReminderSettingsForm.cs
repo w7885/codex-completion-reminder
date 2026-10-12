@@ -50,24 +50,24 @@ namespace CodexCompletionReminder
             tabs.TabPages.Add(BuildAppearancePage());
             Controls.Add(tabs);
 
-            Panel buttons = new Panel { Dock = DockStyle.Bottom, Height = 50 };
+            Panel buttons = new Panel { Dock = DockStyle.Bottom, Height = 50, Width = ClientSize.Width };
             Button reset = new Button { Text = "恢复默认", Width = 100, Height = 30, Left = 18, Top = 10 };
             reset.Click += delegate { ResetDefaults(); };
-            Button save = new Button { Text = "保存", Width = 100, Height = 30, Left = ClientSize.Width - 224, Top = 10, Anchor = AnchorStyles.Right | AnchorStyles.Top };
-            save.Click += delegate
+            Button confirm = new Button { Name = "confirmButton", Text = "确认", Width = 100, Height = 30, Left = buttons.ClientSize.Width - 224, Top = 10, Anchor = AnchorStyles.Right | AnchorStyles.Top };
+            confirm.Click += delegate
             {
                 working.Normalize();
                 ResultSettings = working;
                 DialogResult = DialogResult.OK;
                 Close();
             };
-            Button cancel = new Button { Text = "取消", Width = 100, Height = 30, Left = ClientSize.Width - 112, Top = 10, Anchor = AnchorStyles.Right | AnchorStyles.Top };
+            Button cancel = new Button { Name = "cancelButton", Text = "取消", Width = 100, Height = 30, Left = buttons.ClientSize.Width - 112, Top = 10, Anchor = AnchorStyles.Right | AnchorStyles.Top };
             cancel.Click += delegate { DialogResult = DialogResult.Cancel; Close(); };
             buttons.Controls.Add(reset);
-            buttons.Controls.Add(save);
+            buttons.Controls.Add(confirm);
             buttons.Controls.Add(cancel);
             Controls.Add(buttons);
-            AcceptButton = save;
+            AcceptButton = confirm;
             CancelButton = cancel;
             LoadIntoControls();
         }
