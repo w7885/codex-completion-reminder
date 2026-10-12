@@ -46,6 +46,29 @@ try {
             throw 'Legacy V4 approval/interrupt/rejected input must not notify or return a decision.'
         }
     }
+    foreach ($executable in @($hookPath, $legacyHook)) {
+        foreach ($bom in @($false, $true)) {
+            $info = New-Object Diagnostics.ProcessStartInfo
+            $info.FileName = $executable
+            $info.UseShellExecute = $false
+            $info.CreateNoWindow = $true
+            $info.RedirectStandardInput = $true
+            $info.RedirectStandardOutput = $true
+            $info.RedirectStandardError = $true
+            $process = New-Object Diagnostics.Process
+            $process.StartInfo = $info
+            [void]$process.Start()
+            $json = '{"hook_event_name":"Stop","turn_id":"utf8-test","last_assistant_message":"任务已完成。中文路径与字符只用于测试。"}'
+            if ($bom) { $json = [string][char]0xFEFF + $json }
+            $bytes = (New-Object Text.UTF8Encoding($false)).GetBytes($json)
+            $process.StandardInput.BaseStream.Write($bytes, 0, $bytes.Length)
+            $process.StandardInput.Close()
+            if (-not $process.WaitForExit(4000)) { $process.Kill(); throw 'UTF-8 hook timed out.' }
+            $result = $process.StandardOutput.ReadToEnd()
+            if ($process.ExitCode -ne 0 -or $result -notmatch '"continue"\s*:\s*true') { throw 'UTF-8/BOM Stop input failed.' }
+            $process.Dispose()
+        }
+    }
     $hooksPath = Join-Path $testCodexHome 'hooks.json'
     $configPath = Join-Path $testCodexHome 'config.toml'
     $nativeConfig = "notifications-turn-mode = `"always`"`r`nnotify = [`"example-native-notify`"]`r`n"

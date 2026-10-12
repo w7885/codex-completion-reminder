@@ -19,7 +19,7 @@ namespace CodexCompletionReminder
             Record("bridge-started");
             bool diagnostic = Array.IndexOf(args, "--diagnostic") >= 0;
             string json;
-            try { json = SecureTransport.ReadBounded(Console.In, SecureTransport.MaxHookChars); }
+            try { Console.InputEncoding = new UTF8Encoding(false, true); json = SecureTransport.ReadBounded(Console.In, SecureTransport.MaxHookChars).TrimStart('\uFEFF'); }
             catch { Record("rejected-input"); return 0; }
             string eventName;
             string turnId;
@@ -32,7 +32,7 @@ namespace CodexCompletionReminder
                 eventName = (string)value;
                 turnId = payload.TryGetValue("turn_id", out value) && value is string ? (string)value : "";
             }
-            catch { Record("rejected-json"); return 0; }
+            catch (Exception ex) { Record("rejected-json-" + ex.GetType().Name); return 0; }
             string kind;
             string eventId;
             if (eventName == "Stop")
