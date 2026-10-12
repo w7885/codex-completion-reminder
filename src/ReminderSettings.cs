@@ -26,7 +26,7 @@ namespace CodexCompletionReminder
         public bool Enabled = true;
         public string CompletionChannel = ReminderChannels.Custom;
         public string PermissionChannel = ReminderChannels.Custom;
-        public string ChoiceChannel = ReminderChannels.Native;
+        public string ChoiceChannel = ReminderChannels.Custom;
 
         public string CompletionTitle = "任务已完成";
         public string CompletionDescription = "按任意键或点击鼠标关闭提醒";
@@ -57,7 +57,7 @@ namespace CodexCompletionReminder
         {
             CompletionChannel = NormalizeChannel(CompletionChannel, ReminderChannels.Custom);
             PermissionChannel = NormalizeChannel(PermissionChannel, ReminderChannels.Custom);
-            ChoiceChannel = NormalizeChannel(ChoiceChannel, ReminderChannels.Native);
+            ChoiceChannel = NormalizeChannel(ChoiceChannel, ReminderChannels.Custom);
             CompletionTitle = NormalizeText(CompletionTitle, "任务已完成", 100);
             CompletionDescription = NormalizeText(CompletionDescription, "按任意键或点击鼠标关闭提醒", 180);
             PermissionTitle = NormalizeText(PermissionTitle, "任务需确认", 100);
@@ -102,8 +102,7 @@ namespace CodexCompletionReminder
             string channel = GetChannel(kind);
             bool selected = channel == ReminderChannels.Custom || channel == ReminderChannels.Both;
             if (!selected) return false;
-            // Conversation-choice events are only customizable when a stable event source exists.
-            // Otherwise Codex's own question notification remains the supported fallback.
+            // Preview requires an explicitly enabled read-only source; no implicit native fallback.
             if (kind == ReminderKinds.Choice && !choiceSourceAvailable) return false;
             return true;
         }
@@ -199,13 +198,7 @@ namespace CodexCompletionReminder
             if (File.Exists(path))
             {
                 string backup = path + ".bak";
-                try { File.Replace(temporary, path, backup, true); }
-                catch
-                {
-                    File.Copy(path, backup, true);
-                    File.Copy(temporary, path, true);
-                    File.Delete(temporary);
-                }
+                File.Replace(temporary, path, backup, true);
             }
             else
             {
@@ -222,10 +215,10 @@ namespace CodexCompletionReminder
         public static bool TryParse(string line, out ReminderEvent reminderEvent)
         {
             reminderEvent = null;
-            if (String.IsNullOrWhiteSpace(line)) return false;
-            string[] parts = line.Split(new char[] { '\t' }, 2);
-            if (parts.Length != 2 || String.IsNullOrWhiteSpace(parts[1])) return false;
-            string kind = parts[0].Trim().ToLowerInvariant();
+            if (String.IsNullOrWhiteSpace(line) || Encoding.UTF8.GetByteCount(line) >= SecureTransport.MaxMessageBytes) return false;
+            string[] parts = line.Split(new char[] { '\t' });
+            if (parts.Length != 2 || !SecureTransport.ValidId(parts[1])) return false;
+            string kind = parts[0];
             if (kind != ReminderKinds.Completion && kind != ReminderKinds.Permission && kind != ReminderKinds.Choice)
                 return false;
             reminderEvent = new ReminderEvent { Kind = kind, EventId = parts[1].Trim() };

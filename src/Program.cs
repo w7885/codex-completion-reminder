@@ -20,12 +20,12 @@ namespace CodexCompletionReminder
 
             bool testPopup = Array.IndexOf(args, "--test-popup") >= 0;
             bool createdNew;
-            using (Mutex mutex = new Mutex(false, @"Local\CodexCompletionReminderV4", out createdNew))
+            using (Mutex mutex = new Mutex(false, @"Local\" + SecureTransport.PipeName, out createdNew))
             {
                 if (!createdNew) return 0;
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
-                Application.Run(new ReminderContext(testPopup));
+                Application.Run(new ReminderContext(testPopup, Array.IndexOf(args, "--preview-cards") >= 0));
             }
             return 0;
         }
@@ -33,10 +33,14 @@ namespace CodexCompletionReminder
 
     internal sealed class ReminderContext : ApplicationContext
     {
-        private const string PipeName = "CodexCompletionReminderV4";
+        private static string PipeName { get { return SecureTransport.PipeName; } }
+        private readonly RequestTracker requests = new RequestTracker();
+        private readonly CardMonitor cardMonitor;
+        private readonly object pipeGate = new object();
+        private NamedPipeServerStream activePipe;
         // Codex exposes native question notifications. The current public Hook API does not
         // expose a stable custom event for conversation-choice prompts.
-        private const bool ChoiceEventSourceAvailable = false;
+        private readonly bool ChoiceEventSourceAvailable;
         private readonly Control dispatcher;
         private readonly NotifyIcon tray;
         private readonly Thread pipeThread;
@@ -52,8 +56,9 @@ namespace CodexCompletionReminder
         private ToolStripMenuItem pauseItem;
         private ToolStripMenuItem enabledItem;
 
-        public ReminderContext(bool testPopup)
+        public ReminderContext(bool testPopup, bool previewCards)
         {
+            ChoiceEventSourceAvailable = previewCards;
             settings = SettingsStore.Load();
             dispatcher = new Control();
             IntPtr ignoredHandle = dispatcher.Handle;
@@ -67,6 +72,12 @@ namespace CodexCompletionReminder
             pipeThread.IsBackground = true;
             pipeThread.Name = "Codex reminder pipe";
             pipeThread.Start();
+            if (previewCards)
+                cardMonitor = new CardMonitor(delegate(CardSnapshot snapshot) {
+                    if (stopping) return;
+                    try { dispatcher.BeginInvoke((MethodInvoker)delegate { ApplyCards(snapshot); }); }
+                    catch (InvalidOperationException) {}
+                });
             RefreshEnabledMenu();
 
             if (testPopup)
@@ -118,9 +129,9 @@ namespace CodexCompletionReminder
         {
             using (ReminderSettingsForm form = new ReminderSettingsForm(settings.Clone(), ChoiceEventSourceAvailable))
             {
+                form.SaveAction = NativeNotificationSettings.Save;
                 if (form.ShowDialog() != DialogResult.OK) return;
                 settings = form.ResultSettings;
-                SaveSettings();
                 ClearPendingAndClose();
                 RefreshEnabledMenu();
             }
@@ -141,15 +152,15 @@ namespace CodexCompletionReminder
             {
                 try
                 {
-                    using (NamedPipeServerStream pipe = new NamedPipeServerStream(PipeName, PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.None))
+                    using (NamedPipeServerStream pipe = SecureTransport.CreateServer())
                     {
+                        lock (pipeGate) { if (stopping) return; activePipe = pipe; }
                         pipe.WaitForConnection();
-                        using (StreamReader reader = new StreamReader(pipe, new UTF8Encoding(false), false, 512, true))
-                        {
-                            ReminderEvent reminderEvent;
-                            if (ReminderEvent.TryParse(reader.ReadLine(), out reminderEvent))
-                                dispatcher.BeginInvoke((MethodInvoker)delegate { AcceptEvent(reminderEvent); });
-                        }
+                        ReminderEvent reminderEvent;
+                        if (ReminderEvent.TryParse(SecureTransport.ReadMessage(pipe), out reminderEvent) &&
+                            reminderEvent.Kind == ReminderKinds.Completion)
+                            dispatcher.BeginInvoke((MethodInvoker)delegate { AcceptEvent(reminderEvent); });
+                        lock (pipeGate) { activePipe = null; }
                     }
                 }
                 catch (ObjectDisposedException) { if (stopping) break; }
@@ -161,7 +172,7 @@ namespace CodexCompletionReminder
 
         private void AcceptEvent(ReminderEvent reminderEvent)
         {
-            if (stopping || paused || !settings.Enabled || reminderEvent == null) return;
+            if (stopping || paused || !settings.Enabled || reminderEvent == null || reminderEvent.Kind != ReminderKinds.Completion) return;
             if (!settings.WantsCustomPopup(reminderEvent.Kind, ChoiceEventSourceAvailable)) return;
 
             string dedupeKey = reminderEvent.Kind + ":" + reminderEvent.EventId;
@@ -178,8 +189,9 @@ namespace CodexCompletionReminder
         private void ShowHighestPriorityReminder()
         {
             if (!settings.Enabled || paused) return;
-            string nextKind = pending.CurrentKind;
-            if (nextKind == null) return;
+            string nextKind = requests.Count(ReminderKinds.Permission) > 0 ? ReminderKinds.Permission :
+                requests.Count(ReminderKinds.Choice) > 0 ? ReminderKinds.Choice : pending.CurrentKind;
+            if (nextKind == null) { ClosePopupOnly(); return; }
 
             if (popup != null && !popup.IsDisposed && visibleKind == nextKind)
             {
@@ -208,7 +220,7 @@ namespace CodexCompletionReminder
         {
             if (popup == null || popup.IsDisposed) return;
             popup.SetContent(settings.GetTitle(visibleKind), settings.GetDescription(visibleKind),
-                pending.Count(visibleKind));
+                visibleKind == ReminderKinds.Completion ? pending.Count(visibleKind) : requests.Count(visibleKind));
         }
 
         private void PopupFormClosed(object sender, FormClosedEventArgs e)
@@ -222,7 +234,8 @@ namespace CodexCompletionReminder
 
         private void DismissVisibleAndAdvance()
         {
-            pending.Dismiss(visibleKind);
+            if (visibleKind == ReminderKinds.Completion) pending.Dismiss(visibleKind);
+            else requests.Dismiss(visibleKind);
             ClosePopupOnly();
             ShowHighestPriorityReminder();
         }
@@ -244,12 +257,30 @@ namespace CodexCompletionReminder
         private void ClearPendingAndClose()
         {
             pending.Clear();
+            requests.DismissAll();
             ClosePopupOnly();
+        }
+
+        private void ApplyCards(CardSnapshot snapshot)
+        {
+            requests.Apply(snapshot);
+            // Mark non-custom requests dismissed; channel changes must not resurrect a handled request.
+            foreach (string kind in new string[] { ReminderKinds.Permission, ReminderKinds.Choice })
+                if (paused || !settings.WantsCustomPopup(kind, ChoiceEventSourceAvailable)) requests.Dismiss(kind);
+            if (!paused && settings.Enabled) ShowHighestPriorityReminder();
+        }
+
+        private void StopWorkers()
+        {
+            stopping = true;
+            lock (pipeGate) { if (activePipe != null) try { activePipe.Dispose(); } catch {} }
+            if (cardMonitor != null) cardMonitor.Dispose();
+            if (pipeThread != null && pipeThread.IsAlive) pipeThread.Join(1500);
         }
 
         private void ExitApplication()
         {
-            stopping = true;
+            StopWorkers();
             ClearPendingAndClose();
             tray.Visible = false;
             tray.Dispose();
@@ -261,7 +292,7 @@ namespace CodexCompletionReminder
         {
             if (disposing)
             {
-                stopping = true;
+                StopWorkers();
                 InputDismissHook.Uninstall();
                 if (popup != null && !popup.IsDisposed) popup.Dispose();
                 tray.Visible = false;

@@ -32,6 +32,7 @@ namespace CodexCompletionReminder
         private bool textHandlersAttached;
 
         public ReminderSettings ResultSettings { get; private set; }
+        public Action<ReminderSettings> SaveAction { get; set; }
 
         public ReminderSettingsForm(ReminderSettings settings, bool choiceEventAvailable)
         {
@@ -57,6 +58,8 @@ namespace CodexCompletionReminder
             confirm.Click += delegate
             {
                 working.Normalize();
+                try { if (SaveAction != null) SaveAction(working); }
+                catch { MessageBox.Show(this, "设置未保存，原生配置已尝试回滚。请检查文件权限或配置格式后重试。", "保存失败", MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
                 ResultSettings = working;
                 DialogResult = DialogResult.OK;
                 Close();
@@ -75,7 +78,7 @@ namespace CodexCompletionReminder
         private TabPage BuildEventsPage()
         {
             TabPage page = new TabPage("提醒类型") { AutoScroll = true };
-            globalEnabled = new CheckBox { Text = "启用本插件的自定义浮窗（不更改 Codex 原生通知设置）", Left = 20, Top = 14, AutoSize = true };
+            globalEnabled = new CheckBox { Text = "启用本插件的自定义浮窗", Left = 20, Top = 14, AutoSize = true };
             globalEnabled.CheckedChanged += delegate
             {
                 if (!loading) working.Enabled = globalEnabled.Checked;
@@ -92,19 +95,19 @@ namespace CodexCompletionReminder
             permissionTitle = NewTextBox(100);
             permissionDescription = NewTextBox(180);
             page.Controls.Add(BuildEventGroup("权限审批", 227, 150, permissionChannel, permissionTitle, permissionDescription,
-                "例如运行命令或访问网络前，需要你批准。"));
+                "仅依据真实待处理卡片提醒，不依据 PermissionRequest。识别仍需桌面验收。"));
 
             choiceChannel = NewChannelCombo();
             choiceTitle = NewTextBox(100);
             choiceDescription = NewTextBox(180);
             string choiceHint = choiceSourceAvailable
-                ? "Codex 已提供可监听的选择请求事件。"
-                : "当前版本无法通过自定义 Hook 可靠识别对话选择请求；选择自定义浮窗时将回退到 Codex 原生通知。";
+                ? "已启用只读卡片预览；最小化、撤销与切换聊天尚需验收。"
+                : "卡片识别尚未通过验收。使用 --preview-cards 测试；不会隐式回退原生通知。";
             page.Controls.Add(BuildEventGroup("对话选择请求", 386, 184, choiceChannel, choiceTitle, choiceDescription, choiceHint));
 
             Label nativeHint = new Label
             {
-                Text = "原生通知由 Codex 与 Windows 设置控制，本插件不会更改它们。选择“两者都要”时可能出现双重提醒；原生通知开关需在 Codex/Windows 中管理。",
+                Text = "确认保存会备份并同步 Codex 三类原生通知开关：仅自定义/关闭停用对应原生；原生/两者启用。需重启 Codex 验证重载；Windows 权限仍由系统管理。",
                 Left = 20, Top = 582, Width = 690, Height = 45, AutoSize = false
             };
             page.Controls.Add(nativeHint);

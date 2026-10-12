@@ -71,7 +71,7 @@ namespace CodexCompletionReminder
                 Assert(routing.WantsCustomPopup(ReminderKinds.Completion, false), "completion custom route");
                 Assert(routing.WantsCustomPopup(ReminderKinds.Permission, false), "permission custom route");
                 routing.ChoiceChannel = ReminderChannels.Custom;
-                Assert(!routing.WantsCustomPopup(ReminderKinds.Choice, false), "unsupported choice source falls back to native");
+                Assert(!routing.WantsCustomPopup(ReminderKinds.Choice, false), "unknown choice source suppresses custom without native fallback");
                 Assert(routing.WantsCustomPopup(ReminderKinds.Choice, true), "choice custom route when source exists");
                 routing.PermissionChannel = ReminderChannels.Native;
                 Assert(!routing.WantsCustomPopup(ReminderKinds.Permission, false), "native mode suppresses custom popup");
@@ -96,6 +96,7 @@ namespace CodexCompletionReminder
                 Assert(queue.CurrentKind == null, "notification queue drains");
                 passed++;
 
+                passed += SafetyTests.Run();
                 Console.WriteLine("Self-tests passed: {0} checks.", passed);
                 return 0;
             }

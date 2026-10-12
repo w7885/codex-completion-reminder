@@ -3,7 +3,6 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Runtime.InteropServices;
 
@@ -11,7 +10,7 @@ namespace CodexCompletionReminder
 {
     internal static class CodexReminderHook
     {
-        private const string PipeName = "CodexCompletionReminderV4";
+        private static string PipeName { get { return SecureTransport.PipeName; } }
         private const int ConnectTimeoutMs = 120;
         private const int TotalWaitMs = 1400;
 
@@ -19,21 +18,34 @@ namespace CodexCompletionReminder
         {
             Record("bridge-started");
             bool diagnostic = Array.IndexOf(args, "--diagnostic") >= 0;
-            string json = Console.In.ReadToEnd();
-            string eventName = ReadJsonString(json, "hook_event_name");
+            string json;
+            try { json = SecureTransport.ReadBounded(Console.In, SecureTransport.MaxHookChars); }
+            catch { Record("rejected-input"); return 0; }
+            string eventName;
+            string turnId;
+            try
+            {
+                System.Web.Script.Serialization.JavaScriptSerializer parser = new System.Web.Script.Serialization.JavaScriptSerializer { MaxJsonLength=SecureTransport.MaxHookChars, RecursionLimit=32 };
+                System.Collections.Generic.Dictionary<string, object> payload = parser.Deserialize<System.Collections.Generic.Dictionary<string, object>>(json);
+                object value;
+                if (payload == null || !payload.TryGetValue("hook_event_name", out value) || !(value is string)) throw new InvalidDataException();
+                eventName = (string)value;
+                turnId = payload.TryGetValue("turn_id", out value) && value is string ? (string)value : "";
+            }
+            catch { Record("rejected-json"); return 0; }
             string kind;
             string eventId;
             if (eventName == "Stop")
             {
                 kind = ReminderKinds.Completion;
-                eventId = ReadJsonString(json, "turn_id");
+                eventId = turnId;
                 if (String.IsNullOrWhiteSpace(eventId)) eventId = Guid.NewGuid().ToString("N");
             }
             else if (eventName == "PermissionRequest")
             {
-                kind = ReminderKinds.Permission;
-                // PermissionRequest can fire more than once during a turn; don't collapse distinct prompts.
-                eventId = Guid.NewGuid().ToString("N");
+                // Automatic review is not a real human wait. Never notify from this hook.
+                Record("permission-signal-ignored");
+                return 0;
             }
             else
             {
@@ -42,6 +54,7 @@ namespace CodexCompletionReminder
                 return 0;
             }
 
+            if (!SecureTransport.ValidId(eventId)) { Record("rejected-id"); Console.Out.WriteLine("{\"continue\":true}"); return 0; }
             Record((diagnostic ? "manual-" : "") + "received-" + eventName);
             bool attempted = false;
             bool written = false;
@@ -64,15 +77,6 @@ namespace CodexCompletionReminder
             // Lifecycle hooks must not affect approval or completion. Explicit manual
             // diagnostics additionally report transport failure via the exit code.
             return diagnostic && attempted && !written ? 1 : 0;
-        }
-
-        private static string ReadJsonString(string json, string name)
-        {
-            string pattern = "\"" + Regex.Escape(name) + "\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"";
-            Match match = Regex.Match(json ?? "", pattern);
-            if (!match.Success) return "";
-            try { return Regex.Unescape(match.Groups[1].Value); }
-            catch { return match.Groups[1].Value; }
         }
 
         private static bool Send(string kind, string eventId)
@@ -113,6 +117,7 @@ namespace CodexCompletionReminder
 
         private static void StartHelper()
         {
+            if (Environment.GetEnvironmentVariable("CODEX_REMINDER_TEST_NO_START") == "1") return;
             if (IsIsolatedDesktop())
             {
                 Record("helper-start-skipped-isolated-desktop");

@@ -12,41 +12,10 @@ permissions:
 
 jobs:
   test:
+    timeout-minutes: 10
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - name: Build and run tests
         shell: pwsh
         run: .\tests\Run-Tests.ps1
-
-  release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: test
-    runs-on: windows-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build release binaries
-        shell: pwsh
-        run: .\build.ps1 -Configuration Release
-      - name: Package release assets
-        shell: pwsh
-        run: |
-          $releaseDir = Join-Path $PWD 'release'
-          $releaseDist = Join-Path $releaseDir 'dist'
-          New-Item -ItemType Directory -Force -Path $releaseDist | Out-Null
-          Copy-Item .\dist\CodexReminder.exe, .\dist\CodexReminderHook.exe -Destination $releaseDist
-          Copy-Item .\install.ps1, .\uninstall.ps1, .\build.ps1, .\README.md, .\README.zh-CN.md, .\LICENSE -Destination $releaseDir
-          $zipName = 'Codex-Windows-Completion-Reminder-${{ github.ref_name }}-windows-x64.zip'
-          $zip = Join-Path $PWD $zipName
-          Compress-Archive -Path (Join-Path $releaseDir '*') -DestinationPath $zip -Force
-          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  $zipName" | Set-Content -Encoding ascii (Join-Path $PWD 'SHA256SUMS.txt')
-      - name: Publish GitHub Release
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $zip = Get-ChildItem .\Codex-Windows-Completion-Reminder-${{ github.ref_name }}-windows-x64.zip
-          gh release create '${{ github.ref_name }}' $zip.FullName .\SHA256SUMS.txt --title '${{ github.ref_name }}' --notes 'Unsigned Windows release. Verify SHA-256 or build from source.'

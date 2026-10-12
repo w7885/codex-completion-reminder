@@ -1,0 +1,105 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Text;
+using System.Threading;
+using System.Web.Script.Serialization;
+
+namespace CodexCompletionReminder
+{
+    internal sealed class CardMonitor : IDisposable
+    {
+        private readonly Action<CardSnapshot> publish;
+        private readonly Thread worker;
+        private readonly object gate = new object();
+        private volatile bool stopping;
+        private Process child;
+        private HashSet<string> previousWindows = new HashSet<string>();
+        private sealed class ScanResult
+        {
+            public bool EnumerationComplete { get; set; }
+            public bool Unknown { get; set; }
+            public int MinimizedWindows { get; set; }
+            public List<string> WindowScopes { get; set; }
+            public List<CardRequest> Requests { get; set; }
+        }
+        public CardMonitor(Action<CardSnapshot> callback)
+        {
+            publish = callback;
+            worker = new Thread(Run) { IsBackground=true, Name="Codex read-only cards" };
+            worker.Start();
+        }
+        private void Run()
+        {
+            while (!stopping)
+            {
+                CardSnapshot snapshot = null;
+                try
+                {
+                    string executable = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"CodexReminderScanner.exe");
+                    if (!File.Exists(executable)) return;
+                    using (Process process = new Process())
+                    {
+                        process.StartInfo = new ProcessStartInfo(executable) {
+                            UseShellExecute=false, CreateNoWindow=true,
+                            RedirectStandardOutput=true, RedirectStandardError=true,
+                            StandardOutputEncoding=Encoding.UTF8 };
+                        StringBuilder output = new StringBuilder();
+                        bool tooLong = false;
+                        process.OutputDataReceived += delegate(object sender, DataReceivedEventArgs e) {
+                            if (e.Data == null) return;
+                            lock(output) {
+                                if (output.Length + e.Data.Length > 65536) tooLong=true;
+                                else output.Append(e.Data);
+                            }
+                        };
+                        lock(gate) { if (stopping) return; child=process; process.Start(); }
+                        process.BeginOutputReadLine();
+                        process.BeginErrorReadLine(); // Drain without recording messages.
+                        if (!process.WaitForExit(2500)) { try { process.Kill(); } catch {} }
+                        else
+                        {
+                            process.WaitForExit();
+                            lock(output) {
+                                if (!tooLong && process.ExitCode == 0)
+                                    snapshot=Decode(output.ToString());
+                            }
+                        }
+                        lock(gate) { child=null; }
+                    }
+                }
+                catch { snapshot=null; } // Unknown leaves unresolved state intact.
+                if (!stopping) publish(snapshot);
+                for (int i=0; i<20 && !stopping; i++) Thread.Sleep(100);
+            }
+        }
+        private CardSnapshot Decode(string json)
+        {
+            ScanResult result = new JavaScriptSerializer { MaxJsonLength=65536 }.Deserialize<ScanResult>(json);
+            if (result == null || result.Requests == null || result.WindowScopes == null ||
+                result.Requests.Count > 128 || result.WindowScopes.Count > 128) return null;
+            HashSet<string> windows = new HashSet<string>();
+            foreach (string scope in result.WindowScopes) {
+                if (!SecureTransport.ValidId(scope)) return null;
+                windows.Add(scope);
+            }
+            CardSnapshot snapshot = new CardSnapshot();
+            foreach (CardRequest request in result.Requests)
+                if (request != null && windows.Contains(request.Scope)) snapshot.Requests.Add(request);
+            if (result.EnumerationComplete && !result.Unknown)
+            {
+                foreach (string old in previousWindows) if (!windows.Contains(old)) snapshot.CompleteScopes.Add(old);
+                previousWindows=windows;
+            }
+            else foreach (string scope in windows) previousWindows.Add(scope);
+            return snapshot;
+        }
+        public void Dispose()
+        {
+            stopping=true;
+            lock(gate) { if (child != null) try { child.Kill(); } catch {} }
+            worker.Join(3500);
+        }
+    }
+}

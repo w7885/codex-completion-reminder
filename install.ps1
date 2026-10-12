@@ -7,6 +7,13 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# Source preview: only isolated tests may install until desktop acceptance is complete.
+$defaultHome = [IO.Path]::GetFullPath((Join-Path $env:USERPROFILE '.codex'))
+if ([string]::IsNullOrWhiteSpace($CodexHome) -or [string]::IsNullOrWhiteSpace($StartupDirectory) -or
+    [IO.Path]::GetFullPath($CodexHome).TrimEnd('\') -eq $defaultHome.TrimEnd('\') -or
+    [IO.Path]::GetFullPath($StartupDirectory).TrimEnd('\') -eq [Environment]::GetFolderPath([Environment+SpecialFolder]::Startup).TrimEnd('\')) {
+    throw 'Source preview only: production installation is gated on real approval/minimized desktop acceptance. Use isolated CodexHome and StartupDirectory for tests.'
+}
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $dist = Join-Path $root 'dist'
 $appSource = Join-Path $dist 'CodexReminder.exe'

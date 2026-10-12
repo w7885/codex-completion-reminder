@@ -7,6 +7,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Build or application self-tests failed.' }
 $testRoot = Join-Path $env:TEMP ('Codex Reminder Tests-' + [Guid]::NewGuid().ToString('N'))
 $testCodexHome = Join-Path $testRoot 'codex-home'
 $testStartup = Join-Path $testRoot 'startup'
+$previousNoStart = $env:CODEX_REMINDER_TEST_NO_START
+$env:CODEX_REMINDER_TEST_NO_START = "1"
 $previousCodexHome = $env:CODEX_HOME
 $env:CODEX_HOME = $testCodexHome
 New-Item -ItemType Directory -Force -Path $testCodexHome,$testStartup | Out-Null
@@ -25,6 +27,14 @@ try {
         throw 'PermissionRequest hook must return no decision or stdout content.'
     }
 
+    foreach ($payload in @('{broken', '{"hook_event_name":"Interrupt"}', '{"hook_event_name":"Unknown"}', ('x' * 65537), '{"hook_event_name":"PermissionRequest","tool_input":{"decision":"allow"}}')) {
+        $result = $payload | & $hookPath
+        if ($LASTEXITCODE -ne 0 -or -not [string]::IsNullOrWhiteSpace(($result -join ''))) { throw 'Rejected or permission input must not emit decisions or fail the Codex turn.' }
+    }
+    $before = if (Test-Path (Join-Path $env:LOCALAPPDATA 'CodexCompletionReminder\hook-status.log')) { (Get-Content (Join-Path $env:LOCALAPPDATA 'CodexCompletionReminder\hook-status.log')).Count } else { 0 }
+    $permissionPayload | & $hookPath | Out-Null
+    $newLog = @(Get-Content (Join-Path $env:LOCALAPPDATA 'CodexCompletionReminder\hook-status.log') | Select-Object -Skip $before)
+    if ($newLog -match 'pipe-written') { throw 'PermissionRequest must not trigger transport.' }
     $hooksPath = Join-Path $testCodexHome 'hooks.json'
     $configPath = Join-Path $testCodexHome 'config.toml'
     $nativeConfig = "notifications-turn-mode = `"always`"`r`nnotify = [`"example-native-notify`"]`r`n"
@@ -90,6 +100,7 @@ try {
     Write-Output 'All hook contract and isolated install/uninstall tests passed.'
 }
 finally {
+    $env:CODEX_REMINDER_TEST_NO_START = $previousNoStart
     if ($null -eq $previousCodexHome) { Remove-Item Env:\CODEX_HOME -ErrorAction SilentlyContinue }
     else { $env:CODEX_HOME = $previousCodexHome }
     Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue

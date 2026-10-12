@@ -8,3 +8,6 @@ SHA256SUMS.txt
 *.bak
 settings.json
 *.log
+
+# Local product documents - never publish
+/docs-my/
