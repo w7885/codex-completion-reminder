@@ -31,10 +31,21 @@ try {
         $result = $payload | & $hookPath
         if ($LASTEXITCODE -ne 0 -or -not [string]::IsNullOrWhiteSpace(($result -join ''))) { throw 'Rejected or permission input must not emit decisions or fail the Codex turn.' }
     }
-    $before = if (Test-Path (Join-Path $env:LOCALAPPDATA 'CodexCompletionReminder\hook-status.log')) { (Get-Content (Join-Path $env:LOCALAPPDATA 'CodexCompletionReminder\hook-status.log')).Count } else { 0 }
-    $permissionPayload | & $hookPath | Out-Null
-    $newLog = @(Get-Content (Join-Path $env:LOCALAPPDATA 'CodexCompletionReminder\hook-status.log') | Select-Object -Skip $before)
-    if ($newLog -match 'pipe-written') { throw 'PermissionRequest must not trigger transport.' }
+    # Shared production logs may contain concurrent Stop events; do not use them as test evidence.
+    $permissionDiagnostic = $permissionPayload | & $hookPath --diagnostic
+    if ($LASTEXITCODE -ne 0 -or -not [string]::IsNullOrWhiteSpace(($permissionDiagnostic -join ''))) {
+        throw 'PermissionRequest must remain a no-op even in diagnostic mode.'
+    }
+    $legacyDirectory = Join-Path $testRoot 'legacy-v4'
+    & (Join-Path $root 'scripts\Build-LegacyHook.ps1') -OutputDirectory $legacyDirectory
+    if ($LASTEXITCODE -ne 0) { throw 'Legacy V4 hook build failed.' }
+    $legacyHook = Join-Path $legacyDirectory 'CodexReminderHook.exe'
+    foreach ($payload in @($permissionPayload, '{"hook_event_name":"Interrupt"}', '{invalid', ('x' * 65537))) {
+        $legacyOutput = $payload | & $legacyHook --diagnostic
+        if ($LASTEXITCODE -ne 0 -or -not [string]::IsNullOrWhiteSpace(($legacyOutput -join ''))) {
+            throw 'Legacy V4 approval/interrupt/rejected input must not notify or return a decision.'
+        }
+    }
     $hooksPath = Join-Path $testCodexHome 'hooks.json'
     $configPath = Join-Path $testCodexHome 'config.toml'
     $nativeConfig = "notifications-turn-mode = `"always`"`r`nnotify = [`"example-native-notify`"]`r`n"
