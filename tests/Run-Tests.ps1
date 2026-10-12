@@ -58,14 +58,15 @@ try {
             $process = New-Object Diagnostics.Process
             $process.StartInfo = $info
             [void]$process.Start()
-            $json = '{"hook_event_name":"Stop","turn_id":"utf8-test","last_assistant_message":"任务已完成。中文路径与字符只用于测试。"}'
+            $testChinese = [string][char]0x4EFB + [char]0x52A1 + [char]0x5B8C + [char]0x6210
+            $json = '{"hook_event_name":"Stop","turn_id":"utf8-test","last_assistant_message":"' + $testChinese + '"}'
             if ($bom) { $json = [string][char]0xFEFF + $json }
             $bytes = (New-Object Text.UTF8Encoding($false)).GetBytes($json)
             $process.StandardInput.BaseStream.Write($bytes, 0, $bytes.Length)
             $process.StandardInput.Close()
             if (-not $process.WaitForExit(4000)) { $process.Kill(); throw 'UTF-8 hook timed out.' }
             $result = $process.StandardOutput.ReadToEnd()
-            if ($process.ExitCode -ne 0 -or $result -notmatch '"continue"\s*:\s*true') { throw 'UTF-8/BOM Stop input failed.' }
+            if ($process.ExitCode -ne 0 -or $result -notmatch '"continue"\s*:\s*true') { throw ('UTF-8/BOM Stop input failed; bom=' + $bom + '; executable=' + [IO.Path]::GetFileName($executable) + '; exit=' + $process.ExitCode + '; stdoutLength=' + $result.Length) }
             $process.Dispose()
         }
     }
