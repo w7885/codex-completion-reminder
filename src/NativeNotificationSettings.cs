@@ -12,6 +12,7 @@ namespace CodexCompletionReminder
         {
             get
             {
+                if (SettingsStore.IsPreviewProfile) return Path.Combine(SettingsStore.DirectoryPath, "codex", "config.toml");
                 string home = Environment.GetEnvironmentVariable("CODEX_HOME");
                 if (String.IsNullOrWhiteSpace(home)) home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".codex");
                 return Path.Combine(home, "config.toml");

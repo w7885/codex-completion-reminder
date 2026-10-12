@@ -18,6 +18,12 @@ namespace CodexCompletionReminder
             if (Array.IndexOf(args, "--self-test") >= 0)
                 return SelfTests.Run();
 
+            int profileIndex = Array.IndexOf(args, "--preview-profile");
+            if (profileIndex >= 0)
+            {
+                if (profileIndex + 1 >= args.Length) return 2;
+                SettingsStore.UsePreviewDirectory(args[profileIndex + 1]);
+            }
             bool testPopup = Array.IndexOf(args, "--test-popup") >= 0;
             bool createdNew;
             using (Mutex mutex = new Mutex(false, @"Local\" + SecureTransport.PipeName, out createdNew))
@@ -58,8 +64,9 @@ namespace CodexCompletionReminder
 
         public ReminderContext(bool testPopup, bool previewCards)
         {
-            ChoiceEventSourceAvailable = previewCards;
             settings = SettingsStore.Load();
+            ChoiceEventSourceAvailable = (previewCards || settings.ExperimentalChoiceMonitoring) &&
+                File.Exists(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "CodexReminderScanner.exe"));
             dispatcher = new Control();
             IntPtr ignoredHandle = dispatcher.Handle;
             tray = new NotifyIcon();
@@ -72,7 +79,7 @@ namespace CodexCompletionReminder
             pipeThread.IsBackground = true;
             pipeThread.Name = "Codex reminder pipe";
             pipeThread.Start();
-            if (previewCards)
+            if (ChoiceEventSourceAvailable)
                 cardMonitor = new CardMonitor(delegate(CardSnapshot snapshot) {
                     if (stopping) return;
                     try { dispatcher.BeginInvoke((MethodInvoker)delegate { ApplyCards(snapshot); }); }
@@ -263,6 +270,9 @@ namespace CodexCompletionReminder
 
         private void ApplyCards(CardSnapshot snapshot)
         {
+            // Approval candidates remain gated on real positive verification. This opt-in source
+            // only delivers detected structured choices; PermissionRequest never enters this path.
+            if (snapshot != null) snapshot.Requests.RemoveAll(delegate(CardRequest r) { return r == null || r.Kind != ReminderKinds.Choice; });
             requests.Apply(snapshot);
             // Mark non-custom requests dismissed; channel changes must not resurrect a handled request.
             foreach (string kind in new string[] { ReminderKinds.Permission, ReminderKinds.Choice })

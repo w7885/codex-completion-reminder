@@ -15,6 +15,11 @@ namespace CodexCompletionReminder
         public static int Run()
         {
             int groups=0;
+            ReminderSettings experimental=ReminderSettings.Defaults();
+            Check(!experimental.ExperimentalChoiceMonitoring,"experimental monitoring opt-in");
+            experimental.ExperimentalChoiceMonitoring=true;
+            Check(experimental.Clone().ExperimentalChoiceMonitoring,"experimental flag JSON roundtrip");
+            groups++;
             ReminderEvent message;
             Check(!ReminderEvent.TryParse("completion\tbad\tid",out message),"extra IPC field");
             Check(!ReminderEvent.TryParse("permission\tbad\rid",out message),"control characters");
@@ -108,6 +113,9 @@ namespace CodexCompletionReminder
                 Check(updated[0]==239 && File.ReadAllText(config).Contains("# note\r\n"),"BOM CRLF comments retained");
                 Check(Convert.ToBase64String(File.ReadAllBytes(config+".codex-reminder-notifications.bak"))==Convert.ToBase64String(all),"native backup");
                 Check(SettingsStore.LoadFrom(prefs).ChoiceChannel==ReminderChannels.Custom,"settings saved without fallback");
+                settings.ExperimentalChoiceMonitoring=true;
+                SettingsStore.SaveTo(prefs,settings);
+                Check(SettingsStore.LoadFrom(prefs).ExperimentalChoiceMonitoring,"experimental monitoring persists for restart");
                 byte[] before=File.ReadAllBytes(config);
                 settings.CompletionChannel=ReminderChannels.Native;
                 string blocked=Path.Combine(temp,"blocked"); Directory.CreateDirectory(blocked);

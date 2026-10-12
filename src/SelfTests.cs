@@ -19,6 +19,7 @@ namespace CodexCompletionReminder
                 using (ReminderSettingsForm form = new ReminderSettingsForm(defaults.Clone(), false))
                 {
                     Assert(form.Text == "Codex 完成提醒器设置", "settings window initializes");
+                    Assert(form.Controls.Find("experimentalChoiceMonitoring", true).Length == 1, "experimental source option is visible in settings");
                     passed++;
                 }
 

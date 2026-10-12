@@ -24,6 +24,7 @@ namespace CodexCompletionReminder
     internal sealed class ReminderSettings
     {
         public bool Enabled = true;
+        public bool ExperimentalChoiceMonitoring = false;
         public string CompletionChannel = ReminderChannels.Custom;
         public string PermissionChannel = ReminderChannels.Custom;
         public string ChoiceChannel = ReminderChannels.Custom;
@@ -142,10 +143,21 @@ namespace CodexCompletionReminder
     internal static class SettingsStore
     {
         private static readonly JavaScriptSerializer Serializer = new JavaScriptSerializer();
-        public static readonly string DirectoryPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "CodexCompletionReminder");
-        public static readonly string FilePath = Path.Combine(DirectoryPath, "settings.json");
+        private static readonly string DefaultDirectory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CodexCompletionReminder");
+        private static string directoryPath = DefaultDirectory;
+        public static string DirectoryPath { get { return directoryPath; } private set { directoryPath = value; } }
+        public static string FilePath { get { return Path.Combine(DirectoryPath, "settings.json"); } }
+        public static bool IsPreviewProfile { get; private set; }
+        public static void UsePreviewDirectory(string directory)
+        {
+            if (String.IsNullOrWhiteSpace(directory) || !Path.IsPathRooted(directory)) throw new ArgumentException("Preview requires an absolute profile directory.");
+            string full = Path.GetFullPath(directory);
+            if (full.TrimEnd(Path.DirectorySeparatorChar).Equals(DefaultDirectory.TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException("Preview cannot use production settings.");
+            DirectoryPath = full;
+            IsPreviewProfile = true;
+        }
 
         public static ReminderSettings Load()
         {

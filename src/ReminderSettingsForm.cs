@@ -10,6 +10,7 @@ namespace CodexCompletionReminder
         private ReminderSettings working;
         private readonly bool choiceSourceAvailable;
         private CheckBox globalEnabled;
+        private CheckBox experimentalChoice;
         private ComboBox completionChannel;
         private ComboBox permissionChannel;
         private ComboBox choiceChannel;
@@ -84,6 +85,12 @@ namespace CodexCompletionReminder
                 if (!loading) working.Enabled = globalEnabled.Checked;
             };
             page.Controls.Add(globalEnabled);
+            experimentalChoice = new CheckBox {
+                Name = "experimentalChoiceMonitoring", Text = "启用实验性选择卡片识别（保存后重启提醒器；未通过最小化与跨聊天验收）",
+                Left = 20, Top = 641, Width = 685, Height = 38
+            };
+            experimentalChoice.CheckedChanged += delegate { if (!loading) working.ExperimentalChoiceMonitoring = experimentalChoice.Checked; };
+            page.Controls.Add(experimentalChoice);
 
             completionChannel = NewChannelCombo();
             completionTitle = NewTextBox(100);
@@ -101,8 +108,8 @@ namespace CodexCompletionReminder
             choiceTitle = NewTextBox(100);
             choiceDescription = NewTextBox(180);
             string choiceHint = choiceSourceAvailable
-                ? "已启用只读卡片预览；最小化、撤销与切换聊天尚需验收。"
-                : "卡片识别尚未通过验收。使用 --preview-cards 测试；不会隐式回退原生通知。";
+                ? "实验识别已启动：读取真实选择卡片。最小化、跨聊天及自动撤销仍未完整验证，不保证这些场景提醒。"
+                : "只选择自定义渠道不会启动识别。需下方启用实验监测，或使用隔离预览；本机稳定版尚未交付此项。";
             page.Controls.Add(BuildEventGroup("对话选择请求", 386, 184, choiceChannel, choiceTitle, choiceDescription, choiceHint));
 
             Label nativeHint = new Label
@@ -259,6 +266,7 @@ namespace CodexCompletionReminder
         {
             loading = true;
             globalEnabled.Checked = working.Enabled;
+            experimentalChoice.Checked = working.ExperimentalChoiceMonitoring;
             SelectChannel(completionChannel, working.CompletionChannel);
             SelectChannel(permissionChannel, working.PermissionChannel);
             SelectChannel(choiceChannel, working.ChoiceChannel);

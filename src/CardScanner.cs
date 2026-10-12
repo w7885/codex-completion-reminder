@@ -108,9 +108,10 @@ namespace CodexCompletionReminder
             HashSet<string> ids = new HashSet<string>();
             AutomationElementCollection grants = root.FindAll(TreeScope.Descendants, Grant);
             foreach (AutomationElement button in grants) AddAncestors(root, button, scope, ReminderKinds.Permission, ids, result);
-            AutomationElementCollection radios = root.FindAll(TreeScope.Descendants,
-                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.RadioButton));
-            foreach (AutomationElement radio in radios) AddAncestors(root, radio, scope, ReminderKinds.Choice, ids, result);
+            // Start from the fixed Skip action rather than only radio buttons, so free-text
+            // structured requests are also detected without reading their questions or values.
+            AutomationElementCollection skips = root.FindAll(TreeScope.Descendants, ChoiceAction("跳过","Skip"));
+            foreach (AutomationElement skip in skips) AddAncestors(root, skip, scope, ReminderKinds.Choice, ids, result);
             if (result.Requests.Count == 0) result.Unknown = true;
         }
         private static void AddAncestors(AutomationElement root, AutomationElement control, string scope, string kind, HashSet<string> ids, Output result)
@@ -123,7 +124,10 @@ namespace CodexCompletionReminder
                 bool valid = kind == ReminderKinds.Permission
                     ? group.FindFirst(TreeScope.Descendants,Deny) != null
                     : group.FindFirst(TreeScope.Descendants,ChoiceAction("跳过","Skip")) != null &&
-                      group.FindFirst(TreeScope.Descendants,ChoiceAction("发送","Send")) != null;
+                      group.FindFirst(TreeScope.Descendants,ChoiceAction("发送","Send")) != null &&
+                      group.FindFirst(TreeScope.Descendants,new OrCondition(
+                          new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.RadioButton),
+                          new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.Edit))) != null;
                 if (!valid) continue;
                 string id = Hash(scope + ":" + String.Join(".",group.GetRuntimeId()));
                 if (ids.Add(kind + ":" + id)) result.Requests.Add(new CardRequest { Kind=kind, Id=id, Scope=scope });
