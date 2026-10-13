@@ -14,11 +14,11 @@ if (-not (Test-Path -LiteralPath $csc)) {
 }
 if (-not (Test-Path -LiteralPath $csc)) { throw 'The .NET Framework compiler is unavailable.' }
 
-# Build the no-permission-transport handler from the same source as the V5 preview.
+# Build the completion-only handler from the same source as the V5 preview.
 # Only the completion pipe name differs to match the already installed V4 tray app.
 $source = [IO.File]::ReadAllText((Join-Path $root 'src\CodexReminderHook.cs'))
 $expected = 'private static string PipeName { get { return SecureTransport.PipeName; } }'
-if (-not $source.Contains($expected) -or -not $source.Contains('permission-signal-ignored')) {
+if (-not $source.Contains($expected) -or -not $source.Contains('kind = ReminderKinds.Completion;')) {
     throw 'The expected safe hook source was not found; no output built.'
 }
 $legacy = $source.Replace($expected, 'private const string PipeName = "CodexCompletionReminderV4";')

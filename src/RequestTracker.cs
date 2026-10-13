@@ -31,7 +31,7 @@ namespace CodexCompletionReminder
             foreach (CardRequest request in snapshot.Requests)
             {
                 if (request == null || !SecureTransport.ValidId(request.Id) || !SecureTransport.ValidId(request.Scope) ||
-                    (request.Kind != ReminderKinds.Permission && request.Kind != ReminderKinds.Choice)) continue;
+                    request.Kind != ReminderKinds.Choice) continue;
                 string key = request.Kind + ":" + request.Id;
                 current.Add(key);
                 if (!waiting.ContainsKey(key) && waiting.Count < 1024) waiting.Add(key, request);

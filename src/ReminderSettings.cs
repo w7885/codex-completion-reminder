@@ -8,7 +8,6 @@ namespace CodexCompletionReminder
     internal static class ReminderKinds
     {
         public const string Completion = "completion";
-        public const string Permission = "permission";
         public const string Choice = "choice";
     }
 
@@ -26,14 +25,11 @@ namespace CodexCompletionReminder
         public bool Enabled = true;
         public bool ExperimentalChoiceMonitoring = false;
         public string CompletionChannel = ReminderChannels.Custom;
-        public string PermissionChannel = ReminderChannels.Custom;
         public string ChoiceChannel = ReminderChannels.Custom;
 
         public string CompletionTitle = "任务已完成";
         public string CompletionDescription = "按任意键或点击鼠标关闭提醒";
-        public string PermissionTitle = "任务需确认";
-        public string PermissionDescription = "Codex 正在等待你的选择";
-        public string ChoiceTitle = "任务需确认";
+        public string ChoiceTitle = "任务需选择";
         public string ChoiceDescription = "Codex 正在等待你的选择";
 
         public int Width = 370;
@@ -57,13 +53,10 @@ namespace CodexCompletionReminder
         public void Normalize()
         {
             CompletionChannel = NormalizeChannel(CompletionChannel, ReminderChannels.Custom);
-            PermissionChannel = NormalizeChannel(PermissionChannel, ReminderChannels.Custom);
             ChoiceChannel = NormalizeChannel(ChoiceChannel, ReminderChannels.Custom);
             CompletionTitle = NormalizeText(CompletionTitle, "任务已完成", 100);
             CompletionDescription = NormalizeText(CompletionDescription, "按任意键或点击鼠标关闭提醒", 180);
-            PermissionTitle = NormalizeText(PermissionTitle, "任务需确认", 100);
-            PermissionDescription = NormalizeText(PermissionDescription, "Codex 正在等待你的选择", 180);
-            ChoiceTitle = NormalizeText(ChoiceTitle, "任务需确认", 100);
+            ChoiceTitle = NormalizeText(ChoiceTitle, "任务需选择", 100);
             ChoiceDescription = NormalizeText(ChoiceDescription, "Codex 正在等待你的选择", 180);
             Width = Math.Max(300, Math.Min(720, Width));
             Height = Math.Max(96, Math.Min(360, Height));
@@ -76,7 +69,6 @@ namespace CodexCompletionReminder
         public string GetChannel(string kind)
         {
             if (kind == ReminderKinds.Completion) return CompletionChannel;
-            if (kind == ReminderKinds.Permission) return PermissionChannel;
             if (kind == ReminderKinds.Choice) return ChoiceChannel;
             return ReminderChannels.Off;
         }
@@ -84,7 +76,6 @@ namespace CodexCompletionReminder
         public string GetTitle(string kind)
         {
             if (kind == ReminderKinds.Completion) return CompletionTitle;
-            if (kind == ReminderKinds.Permission) return PermissionTitle;
             if (kind == ReminderKinds.Choice) return ChoiceTitle;
             return "Codex";
         }
@@ -92,7 +83,6 @@ namespace CodexCompletionReminder
         public string GetDescription(string kind)
         {
             if (kind == ReminderKinds.Completion) return CompletionDescription;
-            if (kind == ReminderKinds.Permission) return PermissionDescription;
             if (kind == ReminderKinds.Choice) return ChoiceDescription;
             return "";
         }
@@ -231,7 +221,7 @@ namespace CodexCompletionReminder
             string[] parts = line.Split(new char[] { '\t' });
             if (parts.Length != 2 || !SecureTransport.ValidId(parts[1])) return false;
             string kind = parts[0];
-            if (kind != ReminderKinds.Completion && kind != ReminderKinds.Permission && kind != ReminderKinds.Choice)
+            if (kind != ReminderKinds.Completion && kind != ReminderKinds.Choice)
                 return false;
             reminderEvent = new ReminderEvent { Kind = kind, EventId = parts[1].Trim() };
             return true;
@@ -241,41 +231,10 @@ namespace CodexCompletionReminder
     internal sealed class PendingNotificationQueue
     {
         private int completions;
-        private int confirmations;
-
-        public string CurrentKind
-        {
-            get
-            {
-                if (confirmations > 0) return ReminderKinds.Permission;
-                if (completions > 0) return ReminderKinds.Completion;
-                return null;
-            }
-        }
-
-        public int Count(string kind)
-        {
-            if (kind == ReminderKinds.Permission) return confirmations;
-            if (kind == ReminderKinds.Completion) return completions;
-            return 0;
-        }
-
-        public void Add(string kind)
-        {
-            if (kind == ReminderKinds.Permission) confirmations++;
-            else if (kind == ReminderKinds.Completion) completions++;
-        }
-
-        public void Dismiss(string kind)
-        {
-            if (kind == ReminderKinds.Permission) confirmations = 0;
-            else if (kind == ReminderKinds.Completion) completions = 0;
-        }
-
-        public void Clear()
-        {
-            confirmations = 0;
-            completions = 0;
-        }
+        public string CurrentKind { get { return completions > 0 ? ReminderKinds.Completion : null; } }
+        public int Count(string kind) { return kind == ReminderKinds.Completion ? completions : 0; }
+        public void Add(string kind) { if (kind == ReminderKinds.Completion) completions++; }
+        public void Dismiss(string kind) { if (kind == ReminderKinds.Completion) completions = 0; }
+        public void Clear() { completions = 0; }
     }
 }

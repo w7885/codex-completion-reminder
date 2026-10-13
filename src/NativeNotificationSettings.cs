@@ -60,7 +60,6 @@ namespace CodexCompletionReminder
                 throw new InvalidDataException("复杂 TOML 格式无法安全编辑，配置未修改。");
             Dictionary<string, string> values = new Dictionary<string, string>();
             values.Add("notifications-turn-mode", NativeSelected(settings.CompletionChannel) ? "\"always\"" : "\"off\"");
-            values.Add("notifications-permissions-enabled", NativeSelected(settings.PermissionChannel) ? "true" : "false");
             values.Add("notifications-questions-enabled", NativeSelected(settings.ChoiceChannel) ? "true" : "false");
             string newline = text.Contains("\r\n") ? "\r\n" : "\n";
             List<string> lines = new List<string>(text.Replace("\r\n", "\n").Split('\n'));

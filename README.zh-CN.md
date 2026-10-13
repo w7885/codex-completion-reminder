@@ -2,15 +2,15 @@
 
 ## 预览状态与已知限制
 
-当前为早期源码预览。PermissionRequest 在自动审核时也可能触发，即使用户无需操作，因此其自定义浮窗可能误报。对话选择自定义识别尚未集成。experiments/ 中 UIA/MSAA 程序仅用于可行性验证：已识别前台和被遮挡的选择卡片，最小化识别及真实人工审批正例仍未验证。自动撤销浮窗及原生/自定义渠道同步尚未交付。详见 docs/validation/2026-10-11-uia-probe.md。docs/prototypes/ 的归档补丁含已被否决的策略，不能直接应用或作为版本发布。
+当前为受限源码预览，仅提供任务完成和实验性对话选择提醒。权限审批提醒已移除。选择卡片监测需显式启用；非最小化可读卡片已有历史验收，最小化、跨聊天、多窗口与可靠自动撤销仍未完整验证。设置确认保存时会同步完成和问题两类原生通知开关，不管理权限审批通知或原生侧栏状态。历史实验及归档补丁不属于当前可安装功能。
 
-一个面向 Windows Codex 桌面端的托盘提醒工具。任务完成或 Codex 请求工具权限时，它会显示一个置顶但不抢键盘焦点的浮窗。浮窗可通过键盘任意键或鼠标按键关闭，输入会继续传递给下层应用。
+一个面向 Windows Codex 桌面端的托盘提醒工具。任务完成或识别到待回答的结构化选择卡片时，它可以显示置顶、不抢焦点的浮窗。键盘或鼠标按键可关闭浮窗，输入继续传给下层应用。
 
 v1 仅支持 **Windows 上的 Codex 桌面端**，不承诺支持 Codex CLI、WSL、远程会话或服务会话。
 
 ## 功能
 
-- 分别设置任务完成、工具权限审批、对话选择请求的提醒方式。
+- 分别设置任务完成和对话选择请求的提醒方式。
 - 每类可选择自定义浮窗、Codex 原生通知、两者或关闭。
 - 每类分别编辑标题与说明；自定义弹窗可调整宽度、高度及四种颜色，并实时预览。
 - 支持临时暂停、持久关闭本插件提醒或卸载。
@@ -19,14 +19,13 @@ v1 仅支持 **Windows 上的 Codex 桌面端**，不承诺支持 Codex CLI、WS
 ## 事件支持
 
 - **任务完成：**使用 Codex `Stop` Hook。
-- **工具权限审批：**使用 Codex `PermissionRequest` Hook。Hook 不会替用户批准或拒绝，Codex 原有审批界面和策略保持生效。
-- **对话选择/输入：**当前使用 Codex 桌面端的原生问题通知作为受支持的回退。现行公开 Hook API 没有能稳定捕捉所有对话选择请求的自定义事件，因此该类选择自定义浮窗时会回退到原生通知。本工具不会通过问号或回复文本猜测。
+- **对话选择/输入：**仅由显式启用的只读 UIA 扫描器识别固定跳过/发送动作和单选或编辑控件。不读取问题、选项、编辑值，也不根据普通文字提问猜测；没有隐式原生回退。
 
-首次创建设置时，任务完成和权限审批默认使用自定义浮窗；对话选择请求默认使用 Codex 原生通知。已有设置文件中的渠道选择会保留。
+新设置默认保留完成和选择的自定义渠道；实验性选择监测默认关闭，需显式启用并重启提醒器。旧设置的完成、选择和外观偏好保留，权限审批字段在后续保存时不再写入。
 
 `Stop` 表示助手当前一轮回复结束，不代表用户的整体任务一定完成。如果助手以提问结束一轮，自定义完成浮窗可能与 Codex 原生问题通知同时出现。默认仍启用自定义完成浮窗；若想避免这类并发提醒，可将完成提醒改为原生通知或关闭。
 
-Codex 原生通知由 Codex 和 Windows 管理，本工具不会修改相关设置。请在 Codex 设置中打开对应的问题/权限通知，并允许 Windows 向 ChatGPT/Codex 应用发送通知。原生通知的内容和停留时间仍由 Codex/Windows 控制。详见 [Codex 通知说明](https://learn.chatgpt.com/docs/notifications)。
+确认保存渠道时，提醒器会备份并同步 Codex 的完成与问题通知开关。权限审批通知、审批策略、原生侧栏蓝点与需要输入提示不由提醒器管理。外部修改原生偏好后需重启 Codex 验证重载。
 
 ## 构建
 
@@ -36,19 +35,19 @@ Codex 原生通知由 Codex 和 Windows 管理，本工具不会修改相关设�
 .\build.ps1
 ```
 
-构建会生成 `dist\CodexReminder.exe` 与 `dist\CodexReminderHook.exe`，并运行内置设置/路由自测。
+构建会生成 `dist\CodexReminder.exe`、`dist\CodexReminderScanner.exe` 与 `dist\CodexReminderHook.exe`，并运行内置设置/路由自测。
 
 ## 安装和更新
 
-使用预编译版本时，从 GitHub Releases 下载 Windows ZIP，解压后在 PowerShell 中运行 `install.ps1`。Release 中的程序未签名，详见下方安全说明。
+尚未发布稳定安装包。构建产物用于源码预览，实际安装前需完成桌面验收。
 
-从源码安装时，先克隆仓库并运行 `build.ps1`，再运行 `install.ps1`：
+安全构建及隔离安装测试使用：
 
 ```powershell
-.\install.ps1
+.\tests\Run-Tests.ps1
 ```
 
-安装脚本会构建程序、复制到 `%USERPROFILE%\.codex\codex-reminder`，将本工具的 `Stop` 和 `PermissionRequest` Hook 合并到 `%USERPROFILE%\.codex\hooks.json`，并创建当前用户的登录启动项。其他 Hook 和 Codex 原生通知设置会保留。
+当前安装脚本仅允许隔离测试目录，普通生产安装仍有桌面验收门槛。隔离安装只注册本工具的 Stop Hook，并清理本工具遗留的 PermissionRequest Hook；保留其他 Hook、原生配置和其他启动项。本机兼容版本须按已验证的 V4 构建流程备份后应用，不与标准 V5 通道混搭。
 
 重启 Codex，并在提示时审核、信任更新后的 Hook 定义。未审核并信任的 Hook 会被 Codex 跳过。
 
@@ -56,8 +55,8 @@ Codex 原生通知由 Codex 和 Windows 管理，本工具不会修改相关设�
 
 右键托盘图标，选择 **提醒设置…**。设置按 Windows 用户保存到 `%LOCALAPPDATA%\CodexCompletionReminder\settings.json`。
 
-- 全局开关和各事件的提醒渠道控制本插件的自定义浮窗。Codex 原生通知仍由 Codex/Windows 设置控制。
-- 对话选择请求页面会说明：当前无法通过稳定自定义事件识别这类状态，因此使用原生通知回退。
+- 全局开关和各事件的提醒渠道控制本插件的自定义浮窗。确认保存时仅同步完成和问题两类原生通知偏好。
+- 对话选择页面提供实验监测开关，并说明保存后重启及覆盖限制。
 - 临时暂停只持续到程序退出；全局开关会跨重启保存。
 - **退出提醒器**只关闭当前进程，不会卸载 Hook，也不阻止下次事件重新启动。要禁用提醒请关闭全局开关；要移除集成请运行卸载脚本。
 
@@ -67,7 +66,7 @@ Codex 原生通知由 Codex 和 Windows 管理，本工具不会修改相关设�
 
 请从 Windows 文件资源管理器启动提醒器。不要从 Codex 隔离终端重启托盘程序：其窗口可能被启动到 `CodexSandboxDesktop`，用户实际桌面上不会显示它。Hook 检测到该隔离桌面时不会自动启动不可见的提醒器。
 
-Hook 在 `%LOCALAPPDATA%\CodexCompletionReminder\hook-status.log` 记录事件类型和通信状态，不记录对话、命令或键鼠内容。`received-Stop` 表示 Hook 被调用，`pipe-written` 只表示事件已写入通信通道，不证明用户看到了浮窗。`pipe-error-UnauthorizedAccessException` 表示通信被权限边界阻止。正常 Hook 仍保留原来的完成与审批语义。
+Hook 在 `%LOCALAPPDATA%\CodexCompletionReminder\hook-status.log` 记录事件类型和通信状态，不记录对话、命令或键鼠内容。`received-Stop` 表示 Hook 被调用，`pipe-written` 只表示事件已写入通信通道，不证明用户看到了浮窗。`pipe-error-UnauthorizedAccessException` 表示通信被权限边界阻止。正常 Hook 仍保留原来的完成语义；未支持的事件不输出审批决定。
 
 在用户自己的 PowerShell 中，可用 `CodexReminderHook.exe --diagnostic` 接收测试事件；此模式在通信失败时返回非零退出码。Codex 隔离工具中的测试可能被拒绝访问，不能以退出码 0 或窗口接口的“可见”状态作为桌面验收依据。
 
@@ -89,7 +88,7 @@ Hook 在 `%LOCALAPPDATA%\CodexCompletionReminder\hook-status.log` 记录事件�
 .\tests\Run-Tests.ps1
 ```
 
-自动测试覆盖默认值、配置序列化与规范化、渠道路由、Hook 输出和安装/卸载合并。发布前还需手动验证 Codex 前后台弹窗、键盘/鼠标关闭、点击穿透、原生通知回退和多显示器尺寸。
+自动测试覆盖默认值、配置序列化与规范化、渠道路由、Hook 输出和安装/卸载合并。发布前还需手动验证 Codex 前后台弹窗、键盘/鼠标关闭、点击穿透、选择识别、原生侧栏保留和多显示器尺寸。
 
 ## Release 信任说明
 

@@ -88,15 +88,6 @@ namespace CodexCompletionReminder
             using (SHA256 sha = SHA256.Create())
                 return BitConverter.ToString(sha.ComputeHash(Encoding.ASCII.GetBytes(value))).Replace("-", "").Substring(0,24);
         }
-        private static Condition Buttons(params string[] names)
-        {
-            List<Condition> match = new List<Condition>();
-            foreach (string name in names) match.Add(new PropertyCondition(AutomationElement.NameProperty, name));
-            return new AndCondition(new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button),
-                new PropertyCondition(AutomationElement.IsEnabledProperty, true), new OrCondition(match.ToArray()));
-        }
-        private static readonly Condition Grant = Buttons("批准一次","允许一次","本次允许","批准","允许","Allow once","Approve once","Allow","Approve","Yes, proceed","是，继续");
-        private static readonly Condition Deny = Buttons("拒绝","不允许","取消","Deny","Reject","Cancel","No, cancel","否，取消");
         // Send can be disabled while no option is selected. Do not inspect option labels.
         private static Condition ChoiceAction(string a, string b)
         {
@@ -106,31 +97,27 @@ namespace CodexCompletionReminder
         private static void Scan(AutomationElement root, string scope, Output result)
         {
             HashSet<string> ids = new HashSet<string>();
-            AutomationElementCollection grants = root.FindAll(TreeScope.Descendants, Grant);
-            foreach (AutomationElement button in grants) AddAncestors(root, button, scope, ReminderKinds.Permission, ids, result);
             // Start from the fixed Skip action rather than only radio buttons, so free-text
             // structured requests are also detected without reading their questions or values.
             AutomationElementCollection skips = root.FindAll(TreeScope.Descendants, ChoiceAction("跳过","Skip"));
-            foreach (AutomationElement skip in skips) AddAncestors(root, skip, scope, ReminderKinds.Choice, ids, result);
+            foreach (AutomationElement skip in skips) AddAncestors(root, skip, scope, ids, result);
             if (result.Requests.Count == 0) result.Unknown = true;
         }
-        private static void AddAncestors(AutomationElement root, AutomationElement control, string scope, string kind, HashSet<string> ids, Output result)
+        private static void AddAncestors(AutomationElement root, AutomationElement control, string scope, HashSet<string> ids, Output result)
         {
             AutomationElement group = control;
             for (int depth = 0; depth < 3 && result.Requests.Count < 128; depth++)
             {
                 group = TreeWalker.ControlViewWalker.GetParent(group);
                 if (group == null || group.Equals(root)) break;
-                bool valid = kind == ReminderKinds.Permission
-                    ? group.FindFirst(TreeScope.Descendants,Deny) != null
-                    : group.FindFirst(TreeScope.Descendants,ChoiceAction("跳过","Skip")) != null &&
+                bool valid = group.FindFirst(TreeScope.Descendants,ChoiceAction("跳过","Skip")) != null &&
                       group.FindFirst(TreeScope.Descendants,ChoiceAction("发送","Send")) != null &&
                       group.FindFirst(TreeScope.Descendants,new OrCondition(
                           new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.RadioButton),
                           new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.Edit))) != null;
                 if (!valid) continue;
                 string id = Hash(scope + ":" + String.Join(".",group.GetRuntimeId()));
-                if (ids.Add(kind + ":" + id)) result.Requests.Add(new CardRequest { Kind=kind, Id=id, Scope=scope });
+                if (ids.Add(id)) result.Requests.Add(new CardRequest { Kind=ReminderKinds.Choice, Id=id, Scope=scope });
                 break;
             }
         }

@@ -41,12 +41,6 @@ namespace CodexCompletionReminder
                 eventId = turnId;
                 if (String.IsNullOrWhiteSpace(eventId)) eventId = Guid.NewGuid().ToString("N");
             }
-            else if (eventName == "PermissionRequest")
-            {
-                // Automatic review is not a real human wait. Never notify from this hook.
-                Record("permission-signal-ignored");
-                return 0;
-            }
             else
             {
                 Record("unrecognized-event");
@@ -71,8 +65,7 @@ namespace CodexCompletionReminder
             }
             catch (Exception ex) { Record("settings-error-" + ex.GetType().Name); }
 
-            // Stop requires a continuation response. PermissionRequest must remain undecided so
-            // Codex displays its normal approval prompt and applies its normal policy.
+            // Stop requires a continuation response; unsupported events return no decision.
             if (eventName == "Stop") Console.Out.WriteLine("{\"continue\":true}");
             // Lifecycle hooks must not affect approval or completion. Explicit manual
             // diagnostics additionally report transport failure via the exit code.

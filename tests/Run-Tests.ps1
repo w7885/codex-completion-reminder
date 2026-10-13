@@ -84,6 +84,13 @@ try {
                     [pscustomobject]@{ type = 'command'; command = 'pythonw.exe codex_reminder_hook.py' }
                 )
             })
+            PermissionRequest = @([pscustomobject]@{
+                matcher = 'keep-approval-matcher'
+                hooks = @(
+                    [pscustomobject]@{ type = 'command'; command = 'other-approval-hook.exe' },
+                    [pscustomobject]@{ type = 'command'; command = 'CodexReminderHook.exe'; commandWindows = 'CodexReminderHook.exe' }
+                )
+            })
             UserPromptSubmit = @([pscustomobject]@{
                 hooks = @([pscustomobject]@{ type = 'command'; command = 'user-hook.exe' })
             })
@@ -101,7 +108,13 @@ try {
     if (-not (($stopCommands -join ' ') -match 'CodexReminderHook\.exe')) { throw 'Install did not register the Stop hook.' }
     if (@($stopCommands | Where-Object { $_ -match 'CodexReminderHook\.exe' }).Count -ne 1) { throw 'Install left duplicate managed Stop hooks.' }
     $permissionCommands = @($installed.hooks.PermissionRequest | ForEach-Object { $_.hooks } | ForEach-Object { $_.command })
-    if (-not (($permissionCommands -join ' ') -match 'CodexReminderHook\.exe')) { throw 'Install did not register PermissionRequest.' }
+    if (($permissionCommands -join ' ') -match 'CodexReminderHook\.exe|codex_reminder_hook\.py') { throw 'Install left a legacy app-owned PermissionRequest hook.' }
+    if ($permissionCommands.Count -ne 1 -or $permissionCommands[0] -ne 'other-approval-hook.exe' -or $installed.hooks.PermissionRequest[0].matcher -ne 'keep-approval-matcher') { throw 'Install changed an unrelated approval hook or matcher.' }
+    & (Join-Path $root 'install.ps1') -SkipBuild -NoLaunch -CodexHome $testCodexHome -StartupDirectory $testStartup
+    if ($LASTEXITCODE -ne 0) { throw 'Repeated isolated install failed.' }
+    $reinstalled = Get-Content -Raw $hooksPath | ConvertFrom-Json
+    $reinstalledApproval = @($reinstalled.hooks.PermissionRequest | ForEach-Object { $_.hooks } | ForEach-Object { $_.command })
+    if ($reinstalledApproval.Count -ne 1 -or $reinstalledApproval[0] -ne 'other-approval-hook.exe') { throw 'Repeated install did not preserve unrelated approval hooks.' }
     $managed = @($installed.hooks.Stop | ForEach-Object { $_.hooks } | Where-Object { $_.command -match 'CodexReminderHook\.exe' })[0]
     if ($managed.commandWindows -ne $managed.command) { throw 'Windows JSON command override is missing.' }
     # Execute the complete installed command without losing its nested quotes in Windows PowerShell 5.1.
@@ -126,12 +139,24 @@ try {
     $remainingStop = @($removed.hooks.Stop | ForEach-Object { $_.hooks } | ForEach-Object { $_.command })
     if (-not ($remainingStop -contains 'powershell.exe -NoProfile -Command "Write-Output keep"')) { throw 'Uninstall removed an unrelated Stop hook.' }
     if (($remainingStop -join ' ') -match 'CodexReminderHook\.exe|codex_reminder_hook\.py') { throw 'Uninstall left a managed Stop hook.' }
-    if ($removed.hooks.PSObject.Properties['PermissionRequest']) { throw 'Uninstall left the managed PermissionRequest hook.' }
+    $remainingApproval = @($removed.hooks.PermissionRequest | ForEach-Object { $_.hooks } | ForEach-Object { $_.command })
+    if ($remainingApproval.Count -ne 1 -or $remainingApproval[0] -ne 'other-approval-hook.exe') { throw 'Uninstall changed an unrelated approval hook.' }
     if ($removed.hooks.PSObject.Properties['UserPromptSubmit'] -eq $null) { throw 'Uninstall removed an unrelated UserPromptSubmit hook.' }
     if (Test-Path (Join-Path $testStartup 'CodexCompletionReminder.vbs')) { throw 'Uninstall left the app-owned Startup entry.' }
     if (Test-Path (Join-Path $testCodexHome 'codex-reminder')) { throw 'Uninstall left the app-owned install directory.' }
     if ([System.IO.File]::ReadAllText($configPath) -ne $nativeConfig) { throw 'Uninstall changed Codex native notification settings.' }
 
+    # A legacy approval group containing only this app must disappear entirely.
+    $removed.hooks.PermissionRequest = @([pscustomobject]@{
+        hooks = @([pscustomobject]@{ type = 'command'; command = 'CodexReminderHook.exe' })
+    })
+    [IO.File]::WriteAllText($hooksPath, (ConvertTo-Json $removed -Depth 100), (New-Object Text.UTF8Encoding($false)))
+    & (Join-Path $root 'install.ps1') -SkipBuild -NoLaunch -CodexHome $testCodexHome -StartupDirectory $testStartup
+    if ($LASTEXITCODE -ne 0) { throw 'Legacy-only migration install failed.' }
+    $migrated = Get-Content -Raw $hooksPath | ConvertFrom-Json
+    if ($migrated.hooks.PSObject.Properties['PermissionRequest']) { throw 'Legacy-only app approval group was not removed.' }
+    & (Join-Path $root 'uninstall.ps1') -CodexHome $testCodexHome -StartupDirectory $testStartup
+    if ($LASTEXITCODE -ne 0) { throw 'Legacy-only migration cleanup failed.' }
     Write-Output 'All hook contract and isolated install/uninstall tests passed.'
 }
 finally {

@@ -2,15 +2,15 @@
 
 ## Preview status and known limitations
 
-This is an early source preview. PermissionRequest may fire during automatic review even when no human action is required, so its custom popup can be misleading. Conversation-choice custom detection is not integrated. The read-only UIA/MSAA probes under experiments/ are feasibility tools: foreground and occluded choice cards were detected, but minimized detection and real human approval positive cases remain unverified. Automatic popup withdrawal and native/custom channel synchronization are not shipped. See docs/validation/2026-10-11-uia-probe.md. The archived patch under docs/prototypes/ includes a rejected policy and must not be applied as a release.
+This is a limited source preview with task-completion and opt-in conversation-choice reminders. Tool-approval reminders have been removed. Readable non-minimized choice cards have historical acceptance evidence; minimized, cross-chat, multi-window coverage and reliable automatic withdrawal remain unverified. Confirming settings synchronizes only native completion and question notification preferences. Approval notifications and native sidebar states are not managed. Historical experiments and archived patches are not installable features.
 
-A small Windows tray companion for Codex Desktop. It can show a persistent, non-activating popup when a task completes or Codex requests tool approval. The popup stays on top, does not take keyboard focus, and closes on a keyboard key or mouse button while passing that input through.
+A Windows tray companion for Codex Desktop. It can show a persistent, non-activating popup for task completion or a detected unanswered structured choice card. Keyboard or mouse buttons dismiss the popup while passing input through.
 
 This project targets **Codex Desktop on Windows**. Codex CLI, WSL, remote sessions, and service sessions are not supported in v1.
 
 ## Features
 
-- Separate notification preferences for task completion, tool approval, and conversation-choice requests.
+- Separate notification preferences for task completion and conversation-choice requests.
 - Choose custom popup, Codex native notification, both, or off for each category.
 - Edit a title and description per category; adjust popup width, height, and four colors with a live preview.
 - Pause temporarily, disable this companion persistently, or uninstall it.
@@ -19,14 +19,13 @@ This project targets **Codex Desktop on Windows**. Codex CLI, WSL, remote sessio
 ## Event support
 
 - **Task completed:** Codex `Stop` hook.
-- **Tool approval:** Codex `PermissionRequest` hook. The hook never approves or denies the request; Codex's normal approval prompt and policy remain in control.
-- **Conversation choice/input:** Codex Desktop's native question notification is the supported fallback. The current public Hook API does not expose a stable custom event for every conversation-choice prompt, so selecting a custom popup for this category falls back to the native notification. The app does not guess from message punctuation or text.
+- **Conversation choice/input:** opt-in read-only UIA detection of fixed Skip/Send actions and radio/edit controls. No question, option or editor-value reads, no guesses from ordinary chat text and no implicit native fallback.
 
-Defaults for a new settings file are custom popups for task completion and tool approval, and Codex native notifications for conversation-choice requests. An existing settings file keeps the user's saved channel choices.
+New settings use custom channels for completion and choice. Experimental choice monitoring is off by default and requires explicit opt-in and a restart. Existing completion, choice and appearance preferences are retained; legacy approval fields are ignored and no longer serialized when settings are saved.
 
 `Stop` marks the end of an assistant turn, not proof that the user's overall task is finished. If the assistant ends a turn by asking a question, the custom completion popup may appear alongside Codex's native question notification. The default remains the custom completion popup; choose native or off for completion if you prefer to avoid that pairing.
 
-Codex native notifications are managed by Codex and Windows. This app does not change those settings. Enable the relevant notification category in Codex Settings and allow Windows notifications for the ChatGPT/Codex app. Native notification wording and duration remain controlled by Codex/Windows. See the [Codex notifications guide](https://learn.chatgpt.com/docs/notifications).
+Confirming channel settings backs up and synchronizes Codex completion and question notification preferences. Approval notifications, approval policy, native sidebar unread dots and input-needed indicators remain outside this companion. Restart Codex to verify reloading externally changed native preferences.
 
 ## Build
 
@@ -36,19 +35,19 @@ Requirements: Windows with .NET Framework 4.x and Windows PowerShell.
 .\build.ps1
 ```
 
-The build compiles `CodexReminder.exe` and `CodexReminderHook.exe` into `dist/` and runs the built-in settings/route self-tests.
+The build compiles `CodexReminder.exe`, `CodexReminderScanner.exe` and `CodexReminderHook.exe` into `dist/` and runs the built-in settings/route self-tests.
 
 ## Install and update
 
-For a prebuilt install, download the Windows ZIP from GitHub Releases, extract it, and run `install.ps1` in PowerShell. The included binaries are unsigned; see the release trust note below.
+No stable installer is published. Builds are source previews and require desktop acceptance before installation.
 
-To build from source, clone the repository and run `build.ps1` first, then `install.ps1`:
+For a safe build and isolated installation test, run:
 
 ```powershell
-.\install.ps1
+.\tests\Run-Tests.ps1
 ```
 
-The installer builds the app, copies it to `%USERPROFILE%\.codex\codex-reminder`, merges only this app's `Stop` and `PermissionRequest` handlers into `%USERPROFILE%\.codex\hooks.json`, and adds a per-user Startup entry. Existing hooks and Codex notification settings are preserved.
+The current installer allows isolated test directories only; ordinary production installation remains gated on desktop acceptance. It registers only the app-owned Stop hook and removes legacy app-owned PermissionRequest handlers while preserving unrelated hooks, native configuration and other startup entries. Installed V4 compatibility builds require backup and the verified compatibility workflow; do not mix V4 and standard V5 transports.
 
 Restart Codex and review/trust the updated hook definitions when prompted. Hooks that have not been reviewed and trusted are skipped by Codex.
 
@@ -56,8 +55,8 @@ Restart Codex and review/trust the updated hook definitions when prompted. Hooks
 
 Right-click the tray icon and choose **提醒设置…**. Settings are saved per Windows user under `%LOCALAPPDATA%\CodexCompletionReminder\settings.json`.
 
-- The global switch and per-event channel choices control this companion's custom popups. The native Codex channel is still controlled by Codex/Windows settings.
-- For the conversation-choice category, the settings window explains that custom event detection is unavailable and native notifications are used as fallback.
+- The global switch and per-event channel choices control this companion's custom popups. Confirming settings synchronizes only native completion and question preferences.
+- The choice page provides the experimental monitoring opt-in, restart requirement and coverage limitations.
 - The temporary pause only applies until the app exits. The global switch persists across restarts.
 - Choosing **退出提醒器** closes the current process; it does not uninstall the hook or disable a future launch. Use the global switch to disable reminders or run the uninstaller to remove the integration.
 
@@ -67,7 +66,7 @@ The installer uses an explicit PowerShell invocation and the JSON `commandWindow
 
 Start the tray app from Windows File Explorer. Launching it from a Codex isolated terminal may place its windows on `CodexSandboxDesktop`, invisible on the user's interactive desktop. The hook does not auto-start the app on that isolated desktop.
 
-`%LOCALAPPDATA%\CodexCompletionReminder\hook-status.log` records only event type and transport status. It contains no conversation, command, keyboard, or mouse content. `received-Stop` means the hook ran; `pipe-written` means the message was written, not that a user saw the popup. `pipe-error-UnauthorizedAccessException` indicates a permission boundary blocked transport. Normal hook completion and approval contracts remain unchanged.
+`%LOCALAPPDATA%\CodexCompletionReminder\hook-status.log` records only event type and transport status. It contains no conversation, command, keyboard, or mouse content. `received-Stop` means the hook ran; `pipe-written` means the message was written, not that a user saw the popup. `pipe-error-UnauthorizedAccessException` indicates a permission boundary blocked transport. Stop keeps its continuation contract; unsupported events produce no approval decision.
 
 Use `CodexReminderHook.exe --diagnostic` with a test event in the user's own PowerShell to get a nonzero exit code on transport failure. Tests in Codex's isolated tools can be denied access. A zero hook exit code or a window's visible flag is not an end-to-end desktop acceptance test.
 
@@ -89,7 +88,7 @@ Uninstall removes only this app's hook handlers and Startup entry. It keeps user
 .\tests\Run-Tests.ps1
 ```
 
-The automated tests cover defaults, config serialization and normalization, channel routing, hook output behavior, and safe install/uninstall merging. The release checklist also requires a manual desktop test for foreground/background popups, key/mouse dismissal, click-through, Codex native notification fallback, and multi-monitor sizing.
+The automated tests cover defaults, config serialization and normalization, channel routing, hook output behavior, and safe install/uninstall merging. The release checklist also requires a manual desktop test for foreground/background popups, key/mouse dismissal, click-through, choice detection, preserved native sidebar state, and multi-monitor sizing.
 
 ## Release trust
 

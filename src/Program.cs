@@ -196,8 +196,7 @@ namespace CodexCompletionReminder
         private void ShowHighestPriorityReminder()
         {
             if (!settings.Enabled || paused) return;
-            string nextKind = requests.Count(ReminderKinds.Permission) > 0 ? ReminderKinds.Permission :
-                requests.Count(ReminderKinds.Choice) > 0 ? ReminderKinds.Choice : pending.CurrentKind;
+            string nextKind = requests.Count(ReminderKinds.Choice) > 0 ? ReminderKinds.Choice : pending.CurrentKind;
             if (nextKind == null) { ClosePopupOnly(); return; }
 
             if (popup != null && !popup.IsDisposed && visibleKind == nextKind)
@@ -270,13 +269,12 @@ namespace CodexCompletionReminder
 
         private void ApplyCards(CardSnapshot snapshot)
         {
-            // Approval candidates remain gated on real positive verification. This opt-in source
-            // only delivers detected structured choices; PermissionRequest never enters this path.
+            // The opt-in source only delivers detected structured choices.
             if (snapshot != null) snapshot.Requests.RemoveAll(delegate(CardRequest r) { return r == null || r.Kind != ReminderKinds.Choice; });
             requests.Apply(snapshot);
             // Mark non-custom requests dismissed; channel changes must not resurrect a handled request.
-            foreach (string kind in new string[] { ReminderKinds.Permission, ReminderKinds.Choice })
-                if (paused || !settings.WantsCustomPopup(kind, ChoiceEventSourceAvailable)) requests.Dismiss(kind);
+            if (paused || !settings.WantsCustomPopup(ReminderKinds.Choice, ChoiceEventSourceAvailable))
+                requests.Dismiss(ReminderKinds.Choice);
             if (!paused && settings.Enabled) ShowHighestPriorityReminder();
         }
 

@@ -62,35 +62,41 @@ namespace CodexCompletionReminder
 
             RequestTracker tracker=new RequestTracker();
             CardSnapshot first=new CardSnapshot();
-            first.Requests.Add(new CardRequest { Kind=ReminderKinds.Permission,Id="p1",Scope="w1" });
+            first.Requests.Add(new CardRequest { Kind=ReminderKinds.Choice,Id="c0",Scope="w1" });
             first.Requests.Add(new CardRequest { Kind=ReminderKinds.Choice,Id="c1",Scope="w2" });
             tracker.Apply(first); tracker.Apply(first);
-            Check(tracker.WaitingCount==2 && tracker.Count(ReminderKinds.Permission)==1,"request dedupe");
-            tracker.Dismiss(ReminderKinds.Permission); tracker.Apply(first);
-            Check(tracker.WaitingCount==2 && tracker.Count(ReminderKinds.Permission)==0,"dismiss is not resolved");
+            Check(tracker.WaitingCount==2 && tracker.Count(ReminderKinds.Choice)==2,"request dedupe");
+            tracker.Dismiss(ReminderKinds.Choice); tracker.Apply(first);
+            Check(tracker.WaitingCount==2 && tracker.Count(ReminderKinds.Choice)==0,"dismiss is not resolved");
             tracker.Apply(null); tracker.Apply(new CardSnapshot());
             Check(tracker.WaitingCount==2,"unknown or uncovered missing requests retained");
             CardSnapshot complete=new CardSnapshot(); complete.CompleteScopes.Add("w1");
             tracker.Apply(complete);
-            Check(tracker.WaitingCount==1 && tracker.Count(ReminderKinds.Choice)==1,"resolved scope only");
+            Check(tracker.WaitingCount==1 && tracker.Count(ReminderKinds.Choice)==0,"resolved scope only; remaining request stays dismissed");
             complete.CompleteScopes.Add("w2"); tracker.Apply(complete);
             Check(tracker.WaitingCount==0,"cancel/retract");
             tracker.Apply(first);
-            Check(tracker.Count(ReminderKinds.Permission)==1,"new occurrence after authoritative disappearance");
+            Check(tracker.Count(ReminderKinds.Choice)==2,"new occurrence after authoritative disappearance");
+            CardSnapshot unsupported=new CardSnapshot();
+            unsupported.Requests.Add(new CardRequest { Kind="permission",Id="removed",Scope="w3" });
+            tracker.Apply(unsupported);
+            Check(tracker.Count("permission")==0 && tracker.WaitingCount==2,"removed approval card ignored");
             groups++;
 
             ReminderSettings settings=ReminderSettings.Defaults();
-            foreach(string kind in new string[]{ReminderKinds.Completion,ReminderKinds.Permission,ReminderKinds.Choice})
+            foreach(string kind in new string[]{ReminderKinds.Completion,ReminderKinds.Choice})
             foreach(string channel in new string[]{ReminderChannels.Custom,ReminderChannels.Native,ReminderChannels.Both,ReminderChannels.Off})
             {
-                settings.CompletionChannel=settings.PermissionChannel=settings.ChoiceChannel=channel;
+                settings.CompletionChannel=settings.ChoiceChannel=channel;
                 settings.Enabled=true;
                 Check(settings.WantsCustomPopup(kind,true)==(channel=="custom"||channel=="both"),"channel routing");
-                string edited=NativeNotificationSettings.Edit("[desktop]\nother = 42\n[tools]\nx = 1\n",settings);
+                string edited=NativeNotificationSettings.Edit("[desktop]\nnotifications-permissions-enabled = true # keep approval\nother = 42\n[tools]\nx = 1\n",settings);
                 bool native=channel=="native"||channel=="both";
                 Check(edited.Contains("notifications-turn-mode = \""+(native?"always":"off")+"\""),"native completion mapping");
-                Check(edited.Contains("notifications-permissions-enabled = "+(native?"true":"false")) &&
-                    edited.Contains("notifications-questions-enabled = "+(native?"true":"false")),"native request mapping");
+                Check(edited.Contains("notifications-permissions-enabled = true # keep approval"),"native approval preference preserved");
+                Check(edited.Contains("notifications-questions-enabled = "+(native?"true":"false")),"native choice mapping");
+                Check(!NativeNotificationSettings.Edit("[desktop]\n",settings).Contains("notifications-permissions-enabled"),"native approval preference not added");
+                Check(NativeNotificationSettings.Edit("[desktop]\nnotifications-permissions-enabled = false # retain disabled\n",settings).Contains("notifications-permissions-enabled = false # retain disabled"),"disabled native approval preference preserved");
                 Check(edited.Contains("other = 42") && edited.Contains("[tools]\nx = 1"),"unrelated TOML preserved");
                 settings.Enabled=false;
                 Check(!settings.WantsCustomPopup(kind,true),"global disabled");

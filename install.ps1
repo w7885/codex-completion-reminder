@@ -12,7 +12,7 @@ $defaultHome = [IO.Path]::GetFullPath((Join-Path $env:USERPROFILE '.codex'))
 if ([string]::IsNullOrWhiteSpace($CodexHome) -or [string]::IsNullOrWhiteSpace($StartupDirectory) -or
     [IO.Path]::GetFullPath($CodexHome).TrimEnd('\') -eq $defaultHome.TrimEnd('\') -or
     [IO.Path]::GetFullPath($StartupDirectory).TrimEnd('\') -eq [Environment]::GetFolderPath([Environment+SpecialFolder]::Startup).TrimEnd('\')) {
-    throw 'Source preview only: production installation is gated on real approval/minimized desktop acceptance. Use isolated CodexHome and StartupDirectory for tests.'
+    throw 'Source preview only: production installation is gated on minimized and full desktop acceptance. Use isolated CodexHome and StartupDirectory for tests.'
 }
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $dist = Join-Path $root 'dist'
@@ -52,6 +52,19 @@ function Test-ReminderHook($handler) {
     if ($null -eq $handler) { return $false }
     $command = [string]$handler.commandWindows + ' ' + [string]$handler.command_windows + ' ' + [string]$handler.command
     return $command -match '(?i)CodexReminderHook\.exe|codex_reminder_hook\.py'
+}
+
+function Remove-LegacyApprovalHook($document) {
+    if ($null -eq $document.hooks) { return }
+    $property = $document.hooks.PSObject.Properties['PermissionRequest']
+    if ($null -eq $property) { return }
+    $keptGroups = @()
+    foreach ($group in @($property.Value)) {
+        $handlers = @($group.hooks | Where-Object { -not (Test-ReminderHook $_) })
+        if ($handlers.Count -gt 0) { $group.hooks = $handlers; $keptGroups += $group }
+    }
+    if ($keptGroups.Count -eq 0) { $document.hooks.PSObject.Properties.Remove('PermissionRequest') }
+    else { $property.Value = $keptGroups }
 }
 
 function Set-ReminderEventHook($document, [string]$eventName, [string]$commandLine) {
@@ -130,7 +143,7 @@ try {
     $escapedHookPath = (Join-Path $installDir 'CodexReminderHook.exe').Replace("'", "''")
     $hookCommand = 'powershell.exe -NoProfile -NonInteractive -Command "& ''' + $escapedHookPath + '''"'
     Set-ReminderEventHook $document 'Stop' $hookCommand
-    Set-ReminderEventHook $document 'PermissionRequest' $hookCommand
+    Remove-LegacyApprovalHook $document
     $hooksJson = ConvertTo-Json -InputObject $document -Depth 100
     $hooksTemp = $hooksPath + '.tmp'
     [System.IO.File]::WriteAllText($hooksTemp, $hooksJson + "`r`n", (New-Object System.Text.UTF8Encoding($false)))
@@ -179,7 +192,7 @@ if (Test-Path -LiteralPath $backupDir) { Remove-Item -LiteralPath $backupDir -Re
 
 Write-Output 'Installed Codex Completion Reminder.'
 Write-Output "App: $installDir"
-Write-Output "Hooks: $hooksPath (Stop, PermissionRequest)"
+Write-Output "Hooks: $hooksPath (Stop only; legacy app-owned PermissionRequest removed)"
 Write-Output "Startup: $startupPath"
 Write-Output 'Restart Codex and review/trust the updated Hook definitions. Native Codex notification settings were not changed.'
 if (-not $NoLaunch -and -not $PSBoundParameters.ContainsKey('CodexHome')) {

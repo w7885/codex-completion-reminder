@@ -12,12 +12,9 @@ namespace CodexCompletionReminder
         private CheckBox globalEnabled;
         private CheckBox experimentalChoice;
         private ComboBox completionChannel;
-        private ComboBox permissionChannel;
         private ComboBox choiceChannel;
         private TextBox completionTitle;
         private TextBox completionDescription;
-        private TextBox permissionTitle;
-        private TextBox permissionDescription;
         private TextBox choiceTitle;
         private TextBox choiceDescription;
         private NumericUpDown widthInput;
@@ -87,7 +84,7 @@ namespace CodexCompletionReminder
             page.Controls.Add(globalEnabled);
             experimentalChoice = new CheckBox {
                 Name = "experimentalChoiceMonitoring", Text = "启用实验性选择卡片识别（保存后重启提醒器；未通过最小化与跨聊天验收）",
-                Left = 20, Top = 641, Width = 685, Height = 38
+                Left = 20, Top = 482, Width = 685, Height = 38
             };
             experimentalChoice.CheckedChanged += delegate { if (!loading) working.ExperimentalChoiceMonitoring = experimentalChoice.Checked; };
             page.Controls.Add(experimentalChoice);
@@ -98,11 +95,6 @@ namespace CodexCompletionReminder
             page.Controls.Add(BuildEventGroup("任务完成", 48, 170, completionChannel, completionTitle, completionDescription,
                 "Stop Hook 表示当前回复结束；助手提问等待你回复时也可能触发，因此可能同时出现完成浮窗和 Codex 原生问题通知。"));
 
-            permissionChannel = NewChannelCombo();
-            permissionTitle = NewTextBox(100);
-            permissionDescription = NewTextBox(180);
-            page.Controls.Add(BuildEventGroup("权限审批", 227, 150, permissionChannel, permissionTitle, permissionDescription,
-                "仅依据真实待处理卡片提醒，不依据 PermissionRequest。识别仍需桌面验收。"));
 
             choiceChannel = NewChannelCombo();
             choiceTitle = NewTextBox(100);
@@ -110,12 +102,12 @@ namespace CodexCompletionReminder
             string choiceHint = choiceSourceAvailable
                 ? "实验识别已启动：读取真实选择卡片。最小化、跨聊天及自动撤销仍未完整验证，不保证这些场景提醒。"
                 : "只选择自定义渠道不会启动识别。需下方启用实验监测，或使用隔离预览；本机稳定版尚未交付此项。";
-            page.Controls.Add(BuildEventGroup("对话选择请求", 386, 184, choiceChannel, choiceTitle, choiceDescription, choiceHint));
+            page.Controls.Add(BuildEventGroup("对话选择请求", 227, 184, choiceChannel, choiceTitle, choiceDescription, choiceHint));
 
             Label nativeHint = new Label
             {
-                Text = "确认保存会备份并同步 Codex 三类原生通知开关：仅自定义/关闭停用对应原生；原生/两者启用。需重启 Codex 验证重载；Windows 权限仍由系统管理。",
-                Left = 20, Top = 582, Width = 690, Height = 45, AutoSize = false
+                Text = "确认保存会备份并同步 Codex 完成和问题两类原生通知开关：仅自定义/关闭停用对应原生；原生/两者启用。需重启 Codex 验证重载；Windows 权限仍由系统管理。",
+                Left = 20, Top = 423, Width = 690, Height = 45, AutoSize = false
             };
             page.Controls.Add(nativeHint);
             return page;
@@ -180,7 +172,6 @@ namespace CodexCompletionReminder
             Label sampleLabel = new Label { Text = "预览内容", Left = 16, Top = 30, Width = 80 };
             previewKind = new ComboBox { Left = 102, Top = 26, Width = 210, DropDownStyle = ComboBoxStyle.DropDownList };
             previewKind.Items.Add(new KeyValuePair<string, string>(ReminderKinds.Completion, "任务完成"));
-            previewKind.Items.Add(new KeyValuePair<string, string>(ReminderKinds.Permission, "权限审批"));
             previewKind.Items.Add(new KeyValuePair<string, string>(ReminderKinds.Choice, "对话选择"));
             previewKind.DisplayMember = "Value";
             previewKind.ValueMember = "Key";
@@ -250,7 +241,6 @@ namespace CodexCompletionReminder
         {
             if (loading) return;
             if (sender == completionChannel) working.CompletionChannel = SelectedChannel(completionChannel);
-            else if (sender == permissionChannel) working.PermissionChannel = SelectedChannel(permissionChannel);
             else if (sender == choiceChannel) working.ChoiceChannel = SelectedChannel(choiceChannel);
             UpdatePreview();
         }
@@ -268,12 +258,9 @@ namespace CodexCompletionReminder
             globalEnabled.Checked = working.Enabled;
             experimentalChoice.Checked = working.ExperimentalChoiceMonitoring;
             SelectChannel(completionChannel, working.CompletionChannel);
-            SelectChannel(permissionChannel, working.PermissionChannel);
             SelectChannel(choiceChannel, working.ChoiceChannel);
             completionTitle.Text = working.CompletionTitle;
             completionDescription.Text = working.CompletionDescription;
-            permissionTitle.Text = working.PermissionTitle;
-            permissionDescription.Text = working.PermissionDescription;
             choiceTitle.Text = working.ChoiceTitle;
             choiceDescription.Text = working.ChoiceDescription;
             widthInput.Value = working.Width;
@@ -287,8 +274,6 @@ namespace CodexCompletionReminder
             {
                 completionTitle.TextChanged += delegate { if (!loading) { working.CompletionTitle = completionTitle.Text; UpdatePreview(); } };
                 completionDescription.TextChanged += delegate { if (!loading) { working.CompletionDescription = completionDescription.Text; UpdatePreview(); } };
-                permissionTitle.TextChanged += delegate { if (!loading) { working.PermissionTitle = permissionTitle.Text; UpdatePreview(); } };
-                permissionDescription.TextChanged += delegate { if (!loading) { working.PermissionDescription = permissionDescription.Text; UpdatePreview(); } };
                 choiceTitle.TextChanged += delegate { if (!loading) { working.ChoiceTitle = choiceTitle.Text; UpdatePreview(); } };
                 choiceDescription.TextChanged += delegate { if (!loading) { working.ChoiceDescription = choiceDescription.Text; UpdatePreview(); } };
                 textHandlersAttached = true;
