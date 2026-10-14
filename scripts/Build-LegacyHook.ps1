@@ -28,7 +28,7 @@ try {
     $sourceFile = Join-Path $temporary 'LegacyHook.cs'
     [IO.File]::WriteAllText($sourceFile, $legacy, (New-Object System.Text.UTF8Encoding($false)))
     $output = Join-Path $OutputDirectory 'CodexReminderHook.exe'
-    & $csc /nologo /target:exe "/out:$output" /reference:System.Web.Extensions.dll $sourceFile (Join-Path $root 'src\SecureTransport.cs') (Join-Path $root 'src\ReminderSettings.cs')
+    & $csc /nologo /target:exe "/out:$output" /reference:System.Web.Extensions.dll $sourceFile (Join-Path $root 'src\SecureTransport.cs') (Join-Path $root 'src\ReminderSettings.cs') (Join-Path $root 'src\ChoiceCompletionFilter.cs')
     if ($LASTEXITCODE -ne 0) { throw 'Legacy hook compilation failed.' }
     Write-Output "Built legacy V4 hook: $output"
     Write-Output 'Build only: no installed executable, hook definition, settings or startup item was changed.'

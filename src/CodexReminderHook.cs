@@ -16,6 +16,13 @@ namespace CodexCompletionReminder
 
         private static int Main(string[] args)
         {
+            int profileIndex=Array.IndexOf(args,"--preview-profile");
+            if (profileIndex>=0)
+            {
+                if (profileIndex+1>=args.Length) return 2;
+                try { SettingsStore.UsePreviewDirectory(args[profileIndex+1]); }
+                catch { return 2; }
+            }
             Record("bridge-started");
             bool diagnostic = Array.IndexOf(args, "--diagnostic") >= 0;
             string json;
@@ -23,6 +30,8 @@ namespace CodexCompletionReminder
             catch { Record("rejected-input"); return 0; }
             string eventName;
             string turnId;
+            string sessionId;
+            string transcriptPath;
             try
             {
                 System.Web.Script.Serialization.JavaScriptSerializer parser = new System.Web.Script.Serialization.JavaScriptSerializer { MaxJsonLength=SecureTransport.MaxHookChars, RecursionLimit=32 };
@@ -31,6 +40,8 @@ namespace CodexCompletionReminder
                 if (payload == null || !payload.TryGetValue("hook_event_name", out value) || !(value is string)) throw new InvalidDataException();
                 eventName = (string)value;
                 turnId = payload.TryGetValue("turn_id", out value) && value is string ? (string)value : "";
+                sessionId = payload.TryGetValue("session_id", out value) && value is string ? (string)value : "";
+                transcriptPath = payload.TryGetValue("transcript_path", out value) && value is string ? (string)value : "";
             }
             catch (Exception ex) { Record("rejected-json-" + ex.GetType().Name); return 0; }
             string kind;
@@ -58,8 +69,15 @@ namespace CodexCompletionReminder
                 string channel = settings.GetChannel(kind);
                 if (settings.Enabled && (channel == ReminderChannels.Custom || channel == ReminderChannels.Both))
                 {
-                    attempted = true;
-                    written = Send(kind, eventId);
+                    ChoiceCompletionFilter.Result choiceState=ChoiceCompletionFilter.Read(transcriptPath,sessionId,turnId);
+                    if (choiceState==ChoiceCompletionFilter.Result.AwaitingChoice)
+                        Record("completion-suppressed-awaiting-choice");
+                    else
+                    {
+                        if (choiceState==ChoiceCompletionFilter.Result.Unavailable) Record("choice-state-unavailable-"+ChoiceCompletionFilter.Diagnostic);
+                        attempted = true;
+                        written = Send(kind, eventId);
+                    }
                 }
                 else Record("skipped-channel-or-disabled");
             }
@@ -110,6 +128,7 @@ namespace CodexCompletionReminder
 
         private static void StartHelper()
         {
+            if (SettingsStore.IsPreviewProfile) return;
             if (Environment.GetEnvironmentVariable("CODEX_REMINDER_TEST_NO_START") == "1") return;
             if (IsIsolatedDesktop())
             {

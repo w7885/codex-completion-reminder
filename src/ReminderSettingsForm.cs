@@ -93,7 +93,7 @@ namespace CodexCompletionReminder
             completionTitle = NewTextBox(100);
             completionDescription = NewTextBox(180);
             page.Controls.Add(BuildEventGroup("任务完成", 48, 170, completionChannel, completionTitle, completionDescription,
-                "Stop Hook 表示当前回复结束；助手提问等待你回复时也可能触发，因此可能同时出现完成浮窗和 Codex 原生问题通知。"));
+                "Stop 表示当前回复结束。确认同回合仍等待结构化选择时，不显示或排队完成浮窗；提交后最终结束仍正常提醒。选择状态不可读时保留原 Stop 行为。"));
 
 
             choiceChannel = NewChannelCombo();

@@ -36,6 +36,7 @@ $hookArgs = @(
     '/reference:System.Web.Extensions.dll',
     (Join-Path $root 'src\ReminderSettings.cs'),
     (Join-Path $root 'src\CodexReminderHook.cs'), (Join-Path $root 'src\SecureTransport.cs')
+    (Join-Path $root 'src\ChoiceCompletionFilter.cs')
 )
 & $csc @hookArgs
 if ($LASTEXITCODE -ne 0) { throw "Hook bridge compilation failed ($LASTEXITCODE)." }

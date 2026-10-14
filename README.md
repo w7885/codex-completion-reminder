@@ -23,7 +23,9 @@ This project targets **Codex Desktop on Windows**. Codex CLI, WSL, remote sessio
 
 New settings use custom channels for completion and choice. Experimental choice monitoring is off by default and requires explicit opt-in and a restart. Existing completion, choice and appearance preferences are retained; legacy approval fields are ignored and no longer serialized when settings are saved.
 
-`Stop` marks the end of an assistant turn, not proof that the user's overall task is finished. If the assistant ends a turn by asking a question, the custom completion popup may appear alongside Codex's native question notification. The default remains the custom completion popup; choose native or off for completion if you prefer to avoid that pairing.
+`Stop` marks the end of an assistant turn, not proof that the user's overall task is finished. When protocol metadata confirms an outstanding structured choice in the same session and turn, the Hook drops that custom completion event rather than queueing it. Closing the choice popup does not replay that event. Final completion after submission follows the original channel; other sessions and old turns are not globally suppressed.
+
+The bounded adapter projects tool types, request/turn IDs, question counts, creation acknowledgements and reply-envelope IDs; it skips questions, options, answers and message bodies. It requires session_id, turn_id, transcript_path and the supported local record format. Reads are limited to the current CODEX_HOME sessions directory, 32 MiB and a 500 ms parsing budget. Missing metadata, format changes, partial writes or unavailable reads preserve the original Stop behavior and record a status. Ordinary text questions are not treated as structured choices.
 
 Confirming channel settings backs up and synchronizes Codex completion and question notification preferences. Approval notifications, approval policy, native sidebar unread dots and input-needed indicators remain outside this companion. Restart Codex to verify reloading externally changed native preferences.
 
