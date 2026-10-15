@@ -53,6 +53,7 @@ $scannerArgs = @('/nologo', '/target:exe', "/out:$(Join-Path $dist 'CodexReminde
     "/reference:$(Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\WPF\UIAutomationTypes.dll')",
     "/reference:$(Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\WPF\WindowsBase.dll')",
     (Join-Path $root 'src\CardScanner.cs'), (Join-Path $root 'src\RequestTracker.cs'),
+    (Join-Path $root 'src\ChoiceCompletionFilter.cs'),
     (Join-Path $root 'src\SecureTransport.cs'), (Join-Path $root 'src\ReminderSettings.cs'))
 & $csc @scannerArgs
 if ($LASTEXITCODE -ne 0) { throw 'Scanner compilation failed.' }

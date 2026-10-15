@@ -22,10 +22,10 @@ try {
         ForEach-Object { Join-Path $root ('src\'+$_) }
     & $csc /nologo /target:winexe /define:CODEX_REMINDER_V4 "/win32icon:$appIcon" "/out:$(Join-Path $OutputDirectory 'CodexReminder.exe')" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll $compat @appSources
     if($LASTEXITCODE -ne 0){throw 'Compatibility app build failed.'}
-    & $csc /nologo /target:exe /define:CODEX_REMINDER_V4 "/out:$(Join-Path $OutputDirectory 'CodexReminderScanner.exe')" /reference:System.Web.Extensions.dll "/reference:$(Join-Path $f 'WPF\UIAutomationClient.dll')" "/reference:$(Join-Path $f 'WPF\UIAutomationTypes.dll')" "/reference:$(Join-Path $f 'WPF\WindowsBase.dll')" $compat (Join-Path $root 'src\CardScanner.cs') (Join-Path $root 'src\RequestTracker.cs') (Join-Path $root 'src\ReminderSettings.cs')
+    & $csc /nologo /target:exe /define:CODEX_REMINDER_V4 "/out:$(Join-Path $OutputDirectory 'CodexReminderScanner.exe')" /reference:System.Web.Extensions.dll $compat (Join-Path $root 'src\CardScanner.cs') (Join-Path $root 'src\RequestTracker.cs') (Join-Path $root 'src\ReminderSettings.cs') (Join-Path $root 'src\ChoiceCompletionFilter.cs')
     if($LASTEXITCODE -ne 0){throw 'Compatibility scanner build failed.'}
     Write-Output "Built limited choice preview in $OutputDirectory"
-    Write-Output 'No install performed. Foreground/readable-card evidence only; minimized, cross-chat and automatic withdrawal remain unverified.'
+    Write-Output 'No install performed. Metadata choice discovery requires real background and cross-chat desktop acceptance.'
 }
 finally {
     $base=[IO.Path]::GetFullPath($env:TEMP).TrimEnd('\')+'\'

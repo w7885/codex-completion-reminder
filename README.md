@@ -19,7 +19,9 @@ This project targets **Codex Desktop on Windows**. Codex CLI, WSL, remote sessio
 ## Event support
 
 - **Task completed:** Codex `Stop` hook.
-- **Conversation choice/input:** opt-in read-only UIA detection of fixed Skip/Send actions and radio/edit controls. No question, option or editor-value reads, no guesses from ordinary chat text and no implicit native fallback.
+- **Conversation choice/input:** an opt-in isolated scanner projects request metadata from the current user's local Codex Desktop sessions. IDs are scoped by session, turn and request, independent of which chat is rendered. It skips questions, options, answers and ordinary chat text, with no implicit native fallback.
+
+Only the verified desktop-client record format and latest turn are accepted. Complete submission records resolve their own session; partial reads and timeouts do not clear requests. Each scan prioritizes recently modified files, bounds candidates to 32 and enumeration to 2048 files, and has a time budget and child-process watchdog. Large historical collections are not guaranteed full coverage. Output contains only opaque IDs, counts and status; no record content is stored or sent over the network. Local desktop testing confirmed visible choice reminders while another application or another chat in the same Codex window was in front, with no repeat after dismissal. Minimized, multiple-window and other-version scenarios remain unverified.
 
 New settings use custom channels for completion and choice. Experimental choice monitoring is off by default and requires explicit opt-in and a restart. Existing completion, choice and appearance preferences are retained; legacy approval fields are ignored and no longer serialized when settings are saved.
 

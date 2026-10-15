@@ -4,6 +4,7 @@ $build = Join-Path $root 'build.ps1'
 & $build
 if ($LASTEXITCODE -ne 0) { throw 'Build or application self-tests failed.' }
 & (Join-Path $PSScriptRoot 'Run-ChoiceFilterTests.ps1')
+& (Join-Path $PSScriptRoot 'Run-BackgroundChoiceTests.ps1')
 
 $testRoot = Join-Path $env:TEMP ('Codex Reminder Tests-' + [Guid]::NewGuid().ToString('N'))
 $testCodexHome = Join-Path $testRoot 'codex-home'

@@ -23,6 +23,7 @@ namespace CodexCompletionReminder
             public int MinimizedWindows { get; set; }
             public List<string> WindowScopes { get; set; }
             public List<CardRequest> Requests { get; set; }
+            public List<string> CompleteScopes { get; set; }
         }
         public CardMonitor(Action<CardSnapshot> callback)
         {
@@ -75,10 +76,15 @@ namespace CodexCompletionReminder
             }
         }
         private CardSnapshot Decode(string json)
+        { return DecodeResult(json,previousWindows); }
+        internal static CardSnapshot DecodeResult(string json,HashSet<string> previousWindows)
         {
-            ScanResult result = new JavaScriptSerializer { MaxJsonLength=65536 }.Deserialize<ScanResult>(json);
+            ScanResult result;
+            try { result=new JavaScriptSerializer { MaxJsonLength=65536 }.Deserialize<ScanResult>(json); }
+            catch { return null; }
             if (result == null || result.Requests == null || result.WindowScopes == null ||
-                result.Requests.Count > 128 || result.WindowScopes.Count > 128) return null;
+                result.Requests.Count > 128 || result.WindowScopes.Count > 128 || previousWindows==null ||
+                (result.CompleteScopes!=null && result.CompleteScopes.Count>128)) return null;
             HashSet<string> windows = new HashSet<string>();
             foreach (string scope in result.WindowScopes) {
                 if (!SecureTransport.ValidId(scope)) return null;
@@ -86,13 +92,33 @@ namespace CodexCompletionReminder
             }
             CardSnapshot snapshot = new CardSnapshot();
             foreach (CardRequest request in result.Requests)
-                if (request != null && windows.Contains(request.Scope)) snapshot.Requests.Add(request);
+            {
+                if(request==null || request.Kind!=ReminderKinds.Choice || !SecureTransport.ValidId(request.Id) || !windows.Contains(request.Scope)) return null;
+                snapshot.Requests.Add(request);
+            }
+            if(result.CompleteScopes!=null)
+                foreach(string scope in result.CompleteScopes)
+                {
+                    if(!SecureTransport.ValidId(scope) || !windows.Contains(scope)) return null;
+                    snapshot.CompleteScopes.Add(scope);
+                }
             if (result.EnumerationComplete && !result.Unknown)
             {
                 foreach (string old in previousWindows) if (!windows.Contains(old)) snapshot.CompleteScopes.Add(old);
-                previousWindows=windows;
+                previousWindows.Clear();
+                foreach(string scope in windows) previousWindows.Add(scope);
             }
-            else foreach (string scope in windows) previousWindows.Add(scope);
+            else
+            {
+                foreach(CardRequest request in snapshot.Requests)
+                    if(previousWindows.Count<1024) previousWindows.Add(request.Scope);
+                foreach(string scope in snapshot.CompleteScopes)
+                {
+                    bool hasRequests=false;
+                    foreach(CardRequest request in snapshot.Requests) if(request.Scope==scope) { hasRequests=true; break; }
+                    if(!hasRequests) previousWindows.Remove(scope);
+                }
+            }
             return snapshot;
         }
         public void Dispose()

@@ -83,7 +83,7 @@ namespace CodexCompletionReminder
             };
             page.Controls.Add(globalEnabled);
             experimentalChoice = new CheckBox {
-                Name = "experimentalChoiceMonitoring", Text = "启用实验性选择卡片识别（保存后重启提醒器；未通过最小化与跨聊天验收）",
+                Name = "experimentalChoiceMonitoring", Text = "启用实验性选择请求监测（保存后重启提醒器；只读本机请求状态）",
                 Left = 20, Top = 482, Width = 685, Height = 38
             };
             experimentalChoice.CheckedChanged += delegate { if (!loading) working.ExperimentalChoiceMonitoring = experimentalChoice.Checked; };
@@ -100,7 +100,7 @@ namespace CodexCompletionReminder
             choiceTitle = NewTextBox(100);
             choiceDescription = NewTextBox(180);
             string choiceHint = choiceSourceAvailable
-                ? "实验识别已启动：读取真实选择卡片。最小化、跨聊天及自动撤销仍未完整验证，不保证这些场景提醒。"
+                ? "实验监测已启动：只读本机桌面会话的请求状态，不依赖当前聊天界面，不读取问题或答案；仅支持当前已验证的记录格式。"
                 : "只选择自定义渠道不会启动识别。需下方启用实验监测，或使用隔离预览；本机稳定版尚未交付此项。";
             page.Controls.Add(BuildEventGroup("对话选择请求", 227, 184, choiceChannel, choiceTitle, choiceDescription, choiceHint));
 
