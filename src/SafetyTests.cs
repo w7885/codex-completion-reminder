@@ -37,11 +37,7 @@ namespace CodexCompletionReminder
             Check(acl.AreAccessRulesProtected && rules.Count==1,"exclusive pipe DACL");
             PipeAccessRule rule=(PipeAccessRule)rules[0];
             Check(rule.IdentityReference.Equals(WindowsIdentity.GetCurrent().User) && rule.AccessControlType==AccessControlType.Allow,"current user pipe");
-#if CODEX_REMINDER_V4
-            Check(SecureTransport.PipeName=="CodexCompletionReminderV4","legacy V4 pipe namespace");
-#else
-            Check(SecureTransport.PipeName.EndsWith(WindowsIdentity.GetCurrent().User.Value),"user pipe namespace");
-#endif
+            Check(SecureTransport.PipeName=="CodexCompletionReminderV4","unified V4 pipe namespace");
             // Exercise real asynchronous framing under the current user ACL, without a GUI.
             using(NamedPipeServerStream server=SecureTransport.CreateServer())
             using(NamedPipeClientStream client=new NamedPipeClientStream(".",SecureTransport.PipeName,PipeDirection.Out))

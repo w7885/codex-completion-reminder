@@ -14,8 +14,8 @@ if (-not (Test-Path -LiteralPath $csc)) {
 }
 if (-not (Test-Path -LiteralPath $csc)) { throw 'The .NET Framework compiler is unavailable.' }
 
-# Build the completion-only handler from the same source as the V5 preview.
-# Only the completion pipe name differs to match the already installed V4 tray app.
+# Retained build entry point for the installed V4 completion-only handler.
+# The default source transport is also V4.
 $source = [IO.File]::ReadAllText((Join-Path $root 'src\CodexReminderHook.cs'))
 $expected = 'private static string PipeName { get { return SecureTransport.PipeName; } }'
 if (-not $source.Contains($expected) -or -not $source.Contains('kind = ReminderKinds.Completion;')) {

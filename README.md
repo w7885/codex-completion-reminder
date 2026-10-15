@@ -18,6 +18,10 @@ This project targets **Codex Desktop on Windows**. Codex CLI, WSL, remote sessio
 
 ## Event support
 
+Popups are positioned in the upper-right work area of the foreground window's monitor before their first display. Choice polling targets a one-second start cadence, with at least 250 ms of rest after slow scans and no overlapping workers. Actual latency also includes scanning and metadata availability.
+
+For unexpected popup dismissal, exit the running reminder and launch it with `--popup-diagnostics`. This opt-in mode writes bounded local `popup-lifetime.log` entries containing fixed lifecycle and input categories only, without keys, coordinates or chat content. Normal startup leaves diagnostics off. An input event without an injection flag is not proof of physical user input.
+
 - **Task completed:** Codex `Stop` hook.
 - **Conversation choice/input:** an opt-in isolated scanner projects request metadata from the current user's local Codex Desktop sessions. IDs are scoped by session, turn and request, independent of which chat is rendered. It skips questions, options, answers and ordinary chat text, with no implicit native fallback.
 
@@ -51,7 +55,7 @@ For a safe build and isolated installation test, run:
 .\tests\Run-Tests.ps1
 ```
 
-The current installer allows isolated test directories only; ordinary production installation remains gated on desktop acceptance. It registers only the app-owned Stop hook and removes legacy app-owned PermissionRequest handlers while preserving unrelated hooks, native configuration and other startup entries. Installed V4 compatibility builds require backup and the verified compatibility workflow; do not mix V4 and standard V5 transports.
+The current installer allows isolated test directories only; ordinary production installation remains gated on desktop acceptance. It registers only the app-owned Stop hook and removes legacy app-owned PermissionRequest handlers while preserving unrelated hooks, native configuration and other startup entries. Default source builds, the installed Hook and tray application now use the same V4 pipe, retaining the current-user-only pipe ACL. V5 is no longer started. Back up local installations before updating and verify that the real Hook and Startup entry target the same installed directory.
 
 Restart Codex and review/trust the updated hook definitions when prompted. Hooks that have not been reviewed and trusted are skipped by Codex.
 

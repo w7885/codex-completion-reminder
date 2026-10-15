@@ -12,7 +12,9 @@ namespace CodexCompletionReminder
         public const int MaxHookChars = 65536;
         public const int MaxMessageBytes = 512;
         public const int MaxIdChars = 128;
-        public static string PipeName { get { return "CodexCompletionReminderV5-" + WindowsIdentity.GetCurrent().User.Value; } }
+        // Keep the app, installed Hook and Startup entry on the same V4 transport.
+        // The pipe ACL below still grants access exclusively to the current user.
+        public static string PipeName { get { return "CodexCompletionReminderV4"; } }
         public static PipeSecurity Security()
         {
             PipeSecurity acl = new PipeSecurity();

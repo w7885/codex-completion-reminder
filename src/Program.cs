@@ -25,6 +25,7 @@ namespace CodexCompletionReminder
                 SettingsStore.UsePreviewDirectory(args[profileIndex + 1]);
             }
             bool testPopup = Array.IndexOf(args, "--test-popup") >= 0;
+            PopupLifetimeDiagnostic.Enabled = Array.IndexOf(args, "--popup-diagnostics") >= 0;
             bool createdNew;
             using (Mutex mutex = new Mutex(false, @"Local\" + SecureTransport.PipeName, out createdNew))
             {
@@ -209,6 +210,7 @@ namespace CodexCompletionReminder
                 recentEvents.Remove(recentOrder.Dequeue());
 
             pending.Add(reminderEvent.Kind);
+            PopupLifetimeDiagnostic.Record("completion-accepted");
 
             ShowHighestPriorityReminder();
         }
@@ -233,10 +235,17 @@ namespace CodexCompletionReminder
             popup.FormClosed += PopupFormClosed;
             UpdatePopupCount();
             popup.Show();
-            bool hooksInstalled = InputDismissHook.Install(delegate
+            PopupLifetimeDiagnostic.Record("show-" + visibleKind);
+            ReminderPopup expectedPopup = popup;
+            bool hooksInstalled = InputDismissHook.Install(delegate(string inputCategory)
             {
-                if (popup != null && !popup.IsDisposed)
-                    popup.BeginInvoke((MethodInvoker)delegate { DismissVisibleAndAdvance(); });
+                if (PopupCallbackGate.IsCurrent(expectedPopup, popup) && !expectedPopup.IsDisposed)
+                    dispatcher.BeginInvoke((MethodInvoker)delegate {
+                        if (!PopupCallbackGate.IsCurrent(expectedPopup, popup) || expectedPopup.IsDisposed)
+                        { PopupLifetimeDiagnostic.Record("ignored-stale-input"); return; }
+                        PopupLifetimeDiagnostic.Record(inputCategory);
+                        DismissVisibleAndAdvance();
+                    });
             });
             if (!hooksInstalled)
                 tray.ShowBalloonTip(3500, "输入监听不可用", "可以从托盘菜单清空当前提醒。", ToolTipIcon.Warning);
@@ -251,7 +260,8 @@ namespace CodexCompletionReminder
 
         private void PopupFormClosed(object sender, FormClosedEventArgs e)
         {
-            if (closingForTransition) return;
+            if (closingForTransition || !PopupCallbackGate.IsCurrent(sender, popup)) return;
+            PopupLifetimeDiagnostic.Record("form-closed");
             popup = null;
             visibleKind = null;
             InputDismissHook.Uninstall();
@@ -268,6 +278,7 @@ namespace CodexCompletionReminder
 
         private void ClosePopupOnly()
         {
+            if (popup != null) PopupLifetimeDiagnostic.Record("close-" + visibleKind);
             ReminderPopup current = popup;
             popup = null;
             visibleKind = null;
@@ -282,6 +293,7 @@ namespace CodexCompletionReminder
 
         private void ClearPendingAndClose()
         {
+            PopupLifetimeDiagnostic.Record("clear");
             pending.Clear();
             requests.DismissAll();
             ClosePopupOnly();
@@ -289,9 +301,11 @@ namespace CodexCompletionReminder
 
         private void ApplyCards(CardSnapshot snapshot)
         {
+            int before = requests.Count(ReminderKinds.Choice);
             // The opt-in source only delivers detected structured choices.
             if (snapshot != null) snapshot.Requests.RemoveAll(delegate(CardRequest r) { return r == null || r.Kind != ReminderKinds.Choice; });
             requests.Apply(snapshot);
+            if (before > requests.Count(ReminderKinds.Choice)) PopupLifetimeDiagnostic.Record("choice-source-resolved");
             // Mark non-custom requests dismissed; channel changes must not resurrect a handled request.
             if (paused || !settings.WantsCustomPopup(ReminderKinds.Choice, ChoiceEventSourceAvailable))
                 requests.Dismiss(ReminderKinds.Choice);
@@ -384,8 +398,17 @@ namespace CodexCompletionReminder
             Controls.Add(title);
             Controls.Add(description);
             LayoutContent();
-            Shown += PositionWithoutActivation;
+            // Establish final bounds while still hidden. Shown runs after the first
+            // visible frame and would briefly expose the default top-left location.
+            PrepareBounds();
             SizeChanged += delegate { LayoutContent(); };
+        }
+
+        protected override void OnLoad(EventArgs e)
+        {
+            base.OnLoad(e);
+            // Re-evaluate after WinForms scaling and before SetVisibleCore shows us.
+            PrepareBounds();
         }
 
         public void SetContent(string titleText, string descriptionText, int count)
@@ -405,7 +428,8 @@ namespace CodexCompletionReminder
         {
             if (IsDisposed) return;
             TopMost = true;
-            PositionWithoutActivation(this, EventArgs.Empty);
+            PrepareBounds();
+            SetWindowPos(Handle, HwndTopmost, Left, Top, Width, Height, SwpNoActivate | SwpShowWindow);
         }
 
         private void LayoutContent()
@@ -415,18 +439,46 @@ namespace CodexCompletionReminder
             description.Size = new Size(Math.Max(120, ClientSize.Width - 78), Math.Max(20, ClientSize.Height - 68));
         }
 
-        private void PositionWithoutActivation(object sender, EventArgs e)
+        private void PrepareBounds()
         {
             Screen screen;
             IntPtr foreground = GetForegroundWindow();
             try { screen = foreground == IntPtr.Zero ? Screen.PrimaryScreen : Screen.FromHandle(foreground); }
             catch { screen = Screen.PrimaryScreen; }
-            Rectangle area = screen.WorkingArea;
-            int displayWidth = Math.Max(1, Math.Min(Width, area.Width - 24));
-            int displayHeight = Math.Max(1, Math.Min(Height, area.Height - 24));
-            int x = Math.Max(area.Left + 12, area.Right - displayWidth - 12);
-            int y = Math.Max(area.Top + 12, Math.Min(area.Top + 22, area.Bottom - displayHeight - 12));
-            SetWindowPos(Handle, HwndTopmost, x, y, displayWidth, displayHeight, SwpNoActivate | SwpShowWindow);
+            Bounds = CalculateBounds(screen.WorkingArea, Size);
+        }
+
+        internal static Rectangle CalculateBounds(Rectangle area, Size requested)
+        {
+            int marginX=Math.Min(12, Math.Max(0, (area.Width-1)/2));
+            int marginY=Math.Min(12, Math.Max(0, (area.Height-1)/2));
+            int width=Math.Max(1, Math.Min(requested.Width, area.Width-2*marginX));
+            int height=Math.Max(1, Math.Min(requested.Height, area.Height-2*marginY));
+            int x=area.Right-width-marginX;
+            int y=area.Top+Math.Min(22, Math.Max(marginY, area.Height-height-marginY));
+            return new Rectangle(x,y,width,height);
+        }
+    }
+
+    internal static class PopupCallbackGate
+    {
+        internal static bool IsCurrent(object expected, object current)
+        { return expected != null && Object.ReferenceEquals(expected, current); }
+    }
+
+    internal static class PopupLifetimeDiagnostic
+    {
+        internal static bool Enabled;
+        internal static void Record(string status)
+        {
+            if (!Enabled) return;
+            try {
+                Directory.CreateDirectory(SettingsStore.DirectoryPath);
+                string path = Path.Combine(SettingsStore.DirectoryPath, "popup-lifetime.log");
+                if (File.Exists(path) && new FileInfo(path).Length > 65536) File.WriteAllText(path, "");
+                // Fixed status categories only; never keys, coordinates, text or window titles.
+                File.AppendAllText(path, DateTime.UtcNow.ToString("O") + " " + status + Environment.NewLine, new UTF8Encoding(false));
+            } catch { }
         }
     }
 
@@ -445,7 +497,7 @@ namespace CodexCompletionReminder
         private static HookProc mouseCallback;
         private static IntPtr keyboardHook = IntPtr.Zero;
         private static IntPtr mouseHook = IntPtr.Zero;
-        private static Action onInput;
+        private static Action<string> onInput;
         private static int dismissQueued;
 
         [DllImport("user32.dll", SetLastError = true)]
@@ -457,7 +509,7 @@ namespace CodexCompletionReminder
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
         private static extern IntPtr GetModuleHandle(string moduleName);
 
-        public static bool Install(Action dismiss)
+        public static bool Install(Action<string> dismiss)
         {
             if (keyboardHook != IntPtr.Zero && mouseHook != IntPtr.Zero) return true;
             onInput = dismiss;
@@ -485,17 +537,18 @@ namespace CodexCompletionReminder
             Interlocked.Exchange(ref dismissQueued, 0);
         }
 
-        private static void RequestDismiss()
+        private static void RequestDismiss(string category)
         {
             if (Interlocked.Exchange(ref dismissQueued, 1) != 0) return;
-            Action handler = onInput;
-            if (handler != null) { try { handler(); } catch { } }
+            Action<string> handler = onInput;
+            if (handler != null) { try { handler(category); } catch { } }
         }
 
         private static IntPtr KeyboardCallback(int code, IntPtr wParam, IntPtr lParam)
         {
             int message = wParam.ToInt32();
-            if (code >= 0 && (message == WmKeyDown || message == WmSysKeyDown)) RequestDismiss();
+            if (code >= 0 && (message == WmKeyDown || message == WmSysKeyDown))
+                RequestDismiss(InputCategory(false, Marshal.ReadInt32(lParam, 8)));
             return CallNextHookEx(keyboardHook, code, wParam, lParam);
         }
 
@@ -503,8 +556,14 @@ namespace CodexCompletionReminder
         {
             int message = wParam.ToInt32();
             if (code >= 0 && (message == WmLeftButtonDown || message == WmRightButtonDown ||
-                message == WmMiddleButtonDown || message == WmXButtonDown)) RequestDismiss();
+                message == WmMiddleButtonDown || message == WmXButtonDown))
+                RequestDismiss(InputCategory(true, Marshal.ReadInt32(lParam, 12)));
             return CallNextHookEx(mouseHook, code, wParam, lParam);
+        }
+        internal static string InputCategory(bool mouse, int flags)
+        {
+            bool injected = (flags & (mouse ? 3 : 18)) != 0;
+            return (mouse ? "input-mouse-" : "input-keyboard-") + (injected ? "injected" : "unmarked");
         }
     }
 }

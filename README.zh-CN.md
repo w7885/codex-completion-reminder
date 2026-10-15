@@ -6,6 +6,8 @@
 
 一个面向 Windows Codex 桌面端的托盘提醒工具。任务完成或识别到待回答的结构化选择卡片时，它可以显示置顶、不抢焦点的浮窗。键盘或鼠标按键可关闭浮窗，输入继续传给下层应用。
 
+浮窗在首次显示前定位到前台窗口所在显示器的工作区右上角。选择扫描以约 1 秒启动周期为目标，慢扫描后至少等待 250 毫秒；只有一个扫描工作线程，不并发叠加扫描，实际提醒延迟仍包含扫描和元数据写入耗时。
+
 v1 仅支持 **Windows 上的 Codex 桌面端**，不承诺支持 Codex CLI、WSL、远程会话或服务会话。
 
 ## 功能
@@ -51,7 +53,7 @@ v1 仅支持 **Windows 上的 Codex 桌面端**，不承诺支持 Codex CLI、WS
 .\tests\Run-Tests.ps1
 ```
 
-当前安装脚本仅允许隔离测试目录，普通生产安装仍有桌面验收门槛。隔离安装只注册本工具的 Stop Hook，并清理本工具遗留的 PermissionRequest Hook；保留其他 Hook、原生配置和其他启动项。本机兼容版本须按已验证的 V4 构建流程备份后应用，不与标准 V5 通道混搭。
+当前安装脚本仅允许隔离测试目录，普通生产安装仍有桌面验收门槛。隔离安装只注册本工具的 Stop Hook，并清理本工具遗留的 PermissionRequest Hook；保留其他 Hook、原生配置和其他启动项。源码默认构建、安装 Hook 与托盘统一使用 V4 管道，保留当前用户专用的管道访问控制；不再启动 V5。本机更新仍须备份后应用，并确认真实 Hook 与启动项均指向同一安装目录。
 
 重启 Codex，并在提示时审核、信任更新后的 Hook 定义。未审核并信任的 Hook 会被 Codex 跳过。
 
@@ -69,6 +71,8 @@ v1 仅支持 **Windows 上的 Codex 桌面端**，不承诺支持 Codex CLI、WS
 安装器使用显式 PowerShell 调用，并在 JSON 中设置 `commandWindows`。仅写带引号的程序路径会被 PowerShell 当成字符串输出，而不是执行程序。更新 Hook 命令后，请在 Codex 中重新审核并信任变更后的定义。
 
 请从 Windows 文件资源管理器启动提醒器。不要从 Codex 隔离终端重启托盘程序：其窗口可能被启动到 `CodexSandboxDesktop`，用户实际桌面上不会显示它。Hook 检测到该隔离桌面时不会自动启动不可见的提醒器。
+
+排查浮窗意外关闭时，可在退出当前提醒器后使用 `--popup-diagnostics` 启动。该模式仅在本机设置目录的 `popup-lifetime.log` 记录固定显示、关闭原因和输入事件类别，不记录按键、坐标或聊天内容；日志有大小限制，普通启动默认关闭诊断。未标记为模拟输入的事件不代表已证实来自用户硬件。
 
 Hook 在 `%LOCALAPPDATA%\CodexCompletionReminder\hook-status.log` 记录事件类型和通信状态，不记录对话、命令或键鼠内容。`received-Stop` 表示 Hook 被调用，`pipe-written` 只表示事件已写入通信通道，不证明用户看到了浮窗。`pipe-error-UnauthorizedAccessException` 表示通信被权限边界阻止。正常 Hook 仍保留原来的完成语义；未支持的事件不输出审批决定。
 

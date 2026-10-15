@@ -15,6 +15,8 @@ namespace CodexCompletionReminder
         private readonly object gate = new object();
         private volatile bool stopping;
         private Process child;
+        private readonly ManualResetEvent stopSignal = new ManualResetEvent(false);
+        private int disposed;
         private HashSet<string> previousWindows = new HashSet<string>();
         private sealed class ScanResult
         {
@@ -35,6 +37,7 @@ namespace CodexCompletionReminder
         {
             while (!stopping)
             {
+                Stopwatch cycle=Stopwatch.StartNew();
                 CardSnapshot snapshot = null;
                 try
                 {
@@ -72,9 +75,13 @@ namespace CodexCompletionReminder
                 }
                 catch { snapshot=null; } // Unknown leaves unresolved state intact.
                 if (!stopping) publish(snapshot);
-                for (int i=0; i<20 && !stopping; i++) Thread.Sleep(100);
+                // One worker only: target one-second start cadence, with breathing
+                // room after a slow scan instead of always adding two more seconds.
+                if(stopSignal.WaitOne(DelayAfterScan(cycle.ElapsedMilliseconds))) break;
             }
         }
+        internal static int DelayAfterScan(long elapsedMs)
+        { return (int)Math.Max(250L, 1000L-Math.Max(0L,elapsedMs)); }
         private CardSnapshot Decode(string json)
         { return DecodeResult(json,previousWindows); }
         internal static CardSnapshot DecodeResult(string json,HashSet<string> previousWindows)
@@ -123,9 +130,11 @@ namespace CodexCompletionReminder
         }
         public void Dispose()
         {
+            if(Interlocked.Exchange(ref disposed,1)!=0) return;
             stopping=true;
+            stopSignal.Set();
             lock(gate) { if (child != null) try { child.Kill(); } catch {} }
-            worker.Join(3500);
+            if(worker.Join(3500)) stopSignal.Dispose();
         }
     }
 }
