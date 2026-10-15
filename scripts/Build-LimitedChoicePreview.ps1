@@ -4,6 +4,8 @@ $root=Split-Path -Parent $PSScriptRoot
 if([string]::IsNullOrWhiteSpace($OutputDirectory)) { $OutputDirectory=Join-Path $root 'dist\limited-choice-preview' }
 $OutputDirectory=[IO.Path]::GetFullPath($OutputDirectory)
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
+$appIcon=Join-Path $root 'assets\CodexReminder.ico'
+if(-not(Test-Path -LiteralPath $appIcon)){throw 'Application icon is missing: assets\CodexReminder.ico'}
 $f=Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319'
 $csc=Join-Path $f 'csc.exe'
 if(-not(Test-Path -LiteralPath $csc)){throw 'The .NET Framework compiler was not found.'}
@@ -18,9 +20,9 @@ try {
     [IO.File]::WriteAllText($compat,$source.Replace($expected,'"CodexCompletionReminderV4"'),(New-Object System.Text.UTF8Encoding($false)))
     $appSources=@('ReminderSettings.cs','ReminderSettingsForm.cs','Program.cs','SelfTests.cs','SafetyTests.cs','RequestTracker.cs','CardMonitor.cs','NativeNotificationSettings.cs') |
         ForEach-Object { Join-Path $root ('src\'+$_) }
-    & $csc /nologo /target:winexe "/out:$(Join-Path $OutputDirectory 'CodexReminder.exe')" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll $compat @appSources
+    & $csc /nologo /target:winexe /define:CODEX_REMINDER_V4 "/win32icon:$appIcon" "/out:$(Join-Path $OutputDirectory 'CodexReminder.exe')" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll $compat @appSources
     if($LASTEXITCODE -ne 0){throw 'Compatibility app build failed.'}
-    & $csc /nologo /target:exe "/out:$(Join-Path $OutputDirectory 'CodexReminderScanner.exe')" /reference:System.Web.Extensions.dll "/reference:$(Join-Path $f 'WPF\UIAutomationClient.dll')" "/reference:$(Join-Path $f 'WPF\UIAutomationTypes.dll')" "/reference:$(Join-Path $f 'WPF\WindowsBase.dll')" $compat (Join-Path $root 'src\CardScanner.cs') (Join-Path $root 'src\RequestTracker.cs') (Join-Path $root 'src\ReminderSettings.cs')
+    & $csc /nologo /target:exe /define:CODEX_REMINDER_V4 "/out:$(Join-Path $OutputDirectory 'CodexReminderScanner.exe')" /reference:System.Web.Extensions.dll "/reference:$(Join-Path $f 'WPF\UIAutomationClient.dll')" "/reference:$(Join-Path $f 'WPF\UIAutomationTypes.dll')" "/reference:$(Join-Path $f 'WPF\WindowsBase.dll')" $compat (Join-Path $root 'src\CardScanner.cs') (Join-Path $root 'src\RequestTracker.cs') (Join-Path $root 'src\ReminderSettings.cs')
     if($LASTEXITCODE -ne 0){throw 'Compatibility scanner build failed.'}
     Write-Output "Built limited choice preview in $OutputDirectory"
     Write-Output 'No install performed. Foreground/readable-card evidence only; minimized, cross-chat and automatic withdrawal remain unverified.'

@@ -43,6 +43,7 @@ namespace CodexCompletionReminder
         private readonly RequestTracker requests = new RequestTracker();
         private readonly CardMonitor cardMonitor;
         private readonly object pipeGate = new object();
+        private Icon trayIcon;
         private NamedPipeServerStream activePipe;
         // Codex exposes native question notifications. The current public Hook API does not
         // expose a stable custom event for conversation-choice prompts.
@@ -70,7 +71,8 @@ namespace CodexCompletionReminder
             dispatcher = new Control();
             IntPtr ignoredHandle = dispatcher.Handle;
             tray = new NotifyIcon();
-            tray.Icon = SystemIcons.Information;
+            trayIcon = LoadTrayIcon();
+            tray.Icon = trayIcon;
             tray.Text = "Codex 完成提醒器（运行中）";
             tray.ContextMenuStrip = CreateMenu();
             tray.Visible = true;
@@ -151,6 +153,24 @@ namespace CodexCompletionReminder
             {
                 tray.ShowBalloonTip(3500, "提醒设置未保存", ex.Message, ToolTipIcon.Warning);
             }
+        }
+
+        private static Icon LoadTrayIcon()
+        {
+            try
+            {
+                Icon icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+                if (icon != null) return icon;
+            }
+            catch { }
+            return (Icon)SystemIcons.Information.Clone();
+        }
+
+        private void DisposeTrayIcon()
+        {
+            if (trayIcon == null) return;
+            trayIcon.Dispose();
+            trayIcon = null;
         }
 
         private void ListenForEvents()
@@ -292,6 +312,7 @@ namespace CodexCompletionReminder
             ClearPendingAndClose();
             tray.Visible = false;
             tray.Dispose();
+            DisposeTrayIcon();
             dispatcher.Dispose();
             ExitThread();
         }
@@ -305,6 +326,7 @@ namespace CodexCompletionReminder
                 if (popup != null && !popup.IsDisposed) popup.Dispose();
                 tray.Visible = false;
                 tray.Dispose();
+                DisposeTrayIcon();
                 dispatcher.Dispose();
             }
             base.Dispose(disposing);

@@ -15,8 +15,12 @@ if (-not (Test-Path -LiteralPath $csc)) {
 
 $dist = Join-Path $root 'dist'
 New-Item -ItemType Directory -Force -Path $dist | Out-Null
+$appIcon = Join-Path $root 'assets\CodexReminder.ico'
+if (-not (Test-Path -LiteralPath $appIcon)) {
+    throw 'The application icon was not found: assets\CodexReminder.ico'
+}
 $appArgs = @(
-    '/nologo', '/target:winexe', "/out:$(Join-Path $dist 'CodexReminder.exe')",
+    '/nologo', '/target:winexe', "/win32icon:$appIcon", "/out:$(Join-Path $dist 'CodexReminder.exe')",
     '/reference:System.Windows.Forms.dll', '/reference:System.Drawing.dll', '/reference:System.Web.Extensions.dll',
     (Join-Path $root 'src\ReminderSettings.cs'),
     (Join-Path $root 'src\ReminderSettingsForm.cs'),
