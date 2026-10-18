@@ -68,6 +68,8 @@ Right-click the tray icon and choose **提醒设置…**. Settings are saved per
 - The temporary pause only applies until the app exits. The global switch persists across restarts.
 - Choosing **退出提醒器** closes the current process; it does not uninstall the hook or disable a future launch. Use the global switch to disable reminders or run the uninstaller to remove the integration.
 
+**Startup note:** With custom-only notifications selected, starting the reminder or opening Codex may automatically show several custom popups in succession. This is normal startup behavior. Press a keyboard key or click a mouse button to dismiss the current popup; dismiss any following popups in the same way.
+
 ## Troubleshooting missing reminders
 
 The installer uses an explicit PowerShell invocation and the JSON `commandWindows` override. A bare quoted executable path evaluates to a string in PowerShell instead of running the program. Review and trust the changed hook definitions in Codex after updating their commands.
